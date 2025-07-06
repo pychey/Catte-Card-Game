@@ -50,7 +50,7 @@ export const deletePlayer = async (req, res) => {
 };
 
 export const createGuest = async (req, res) => {
-    const guestName = `Guest_${faker.internet.userName()}${faker.string.alphanumeric({ length: 8 })}`;
+    const guestName = `Guest_${faker.internet.username()}${faker.string.alphanumeric({ length: 8 })}`;
 
     try {
         const guest = await authService.createGuest(guestName);

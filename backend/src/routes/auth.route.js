@@ -10,4 +10,4 @@ router.delete('/delete', deletePlayer);
 router.post('/guest', createGuest);
 router.post('/convert', convertGuestToPlayer);
 
-export default router
+export default router;
