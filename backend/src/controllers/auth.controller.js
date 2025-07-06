@@ -3,7 +3,7 @@ import { faker } from '@faker-js/faker';
 
 export const createPlayer = async (req,res) => {
     const { username, password } = req.body;
-    if ( !username || !password ) res.status(400).json({ message: 'Username and password are required' });
+    if ( !username || !password ) return res.status(400).json({ message: 'Username and password are required' });
 
     try {
         const playerCreated = await authService.createPlayer(username, password);
@@ -15,7 +15,7 @@ export const createPlayer = async (req,res) => {
 
 export const getPlayer = async (req,res) => {
     const { username, password } = req.body;
-    if ( !username || !password ) res.status(400).json({ message: 'Username and password are required' });
+    if ( !username || !password ) return res.status(400).json({ message: 'Username and password are required' });
     
     try {
         const player = await authService.getPlayer(username, password);
@@ -27,7 +27,7 @@ export const getPlayer = async (req,res) => {
 
 export const updatePlayer = async (req, res) => {
     const { username, newUsername } = req.body;
-    if ( !username || !newUsername ) res.status(400).json({ message: 'Current username and updated username are required' });
+    if ( !username || !newUsername ) return res.status(400).json({ message: 'Current username and updated username are required' });
 
     try {
         const updatedPlayer = await authService.updatePlayer(newUsername, username);
@@ -39,7 +39,7 @@ export const updatePlayer = async (req, res) => {
 
 export const deletePlayer = async (req, res) => {
     const { username } = req.body;
-    if ( !username ) res.status(400).json({ message: 'Username is required' });
+    if ( !username ) return res.status(400).json({ message: 'Username is required' });
 
     try {
         const deletedPlayer = await authService.deletePlayer(username);
@@ -62,6 +62,7 @@ export const createGuest = async (req, res) => {
 
 export const convertGuestToPlayer = async (req, res) => {
     const { guestName, username, password } = req.body;
+    if ( !guestName || !username || !password ) return res.status(400).json({ message: 'Username and password are required' });
     
     try {
         const convertedPlayer = await authService.convertGuestToPlayer(guestName, username, password);

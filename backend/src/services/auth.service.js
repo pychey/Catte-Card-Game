@@ -2,6 +2,9 @@ import bcrypt from 'bcrypt';
 import Player from "../models/player.js";
 
 export const createPlayer = async (username, password) => {
+    if ( password.length < 6 ) throw new Error('Password must be at least 6 character');
+    const isExist = await Player.findOne({ where: { username }})
+    if (isExist) throw new Error('Username is already taken');
     const hashedPassword = await bcrypt.hash(password, 10);
     const player = await Player.create({
         username,
@@ -20,6 +23,10 @@ export const getPlayer = async (username, password) => {
 }
 
 export const updatePlayer = async (newUsername, username) => {
+    const isExist = await Player.findOne({ where: { username: newUsername }});
+    if (isExist) throw new Error('Username is already taken');
+    const guest = await Player.findOne({ where: { username, isGuest: true }});
+    if (guest) throw new Error('Player is a guest');
     const player = await Player.findOne({ where: { username }});
     if (!player) throw new Error('Player not found');
     player.username = newUsername;
@@ -44,10 +51,12 @@ export const createGuest = async ( guestName ) => {
 }
 
 export const convertGuestToPlayer = async (guestName, username, password) => {
-    const isExist = await Player.findOne({ where: { username }})
-    if (isExist) throw new Error('Username is already taken');
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if ( password.length < 6 ) throw new Error('Password must be at least 6 character');
     const player = await Player.findOne({ where: { username: guestName, isGuest: true }});
+    if (!player) throw new Error('Guest not found');
+    const isExist = await Player.findOne({ where: { username }});
+    if (isExist && isExist.id !== player.id) throw new Error('Username is already taken');
+    const hashedPassword = await bcrypt.hash(password, 10);
     player.username = username;
     player.password = hashedPassword;
     player.isGuest = false;
