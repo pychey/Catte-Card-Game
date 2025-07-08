@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import './models/index.js';
 import authRouter from './routes/auth.route.js'
 import { app, server } from "./utils/socket.js";
+import "./socket/index.js";
 
 sequelize.sync();
 

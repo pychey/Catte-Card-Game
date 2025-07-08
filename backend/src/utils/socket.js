@@ -9,12 +9,4 @@ const io = new Server(server, {
     cors: { origin: ["http://localhost:5173"] },
 });
 
-io.on('connection', (socket) => {
-    console.log('Player connected', socket.id);
-
-    socket.on('disconnect', () => {
-        console.log('Player disconnected', socket.id);
-    })
-})
-
 export { io, app, server };
