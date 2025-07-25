@@ -1,8 +1,7 @@
-//Might need to remove currentPlayer when emitting
-
 import { io } from "../utils/socket.utils.js";
-import { handleGameEvents } from "./game.socket.js";
-import { handleRoomEvents } from "./room.socket.js";
+import handleRoomEvents from "../routes/room.socket.route.js";
+import handleGameEvents from "../routes/game.socket.route.js";
+import { handleRoomDeletion } from "../services/room.socket.service.js";
 
 const connectedUsers = new Set();
 const rooms = new Map();
@@ -27,15 +26,11 @@ io.on('connection', (socket) => {
         if (disconnectedRoomId) {
             const room = rooms.get(disconnectedRoomId);
             room.players = room.players.filter( p => p.id !== socket.id);
-            io.emit('room-update', { roomId: disconnectedRoomId, currentPlayers: room.players.map(p => p.name), playerCount: room.players.length});
+            io.emit('room-update', { roomId: disconnectedRoomId, playerCount: room.players.length});
 
             console.log(`${socket.id} disconnect from room '${room.name}'`);
 
-            if (room.players.length === 0) {
-                rooms.delete(disconnectedRoomId);
-                io.emit('room-update', { roomId: disconnectedRoomId, message: `Room '${room.name}' deleted as it is empty`});
-                console.log(`Room '${room.name}' deleted as it is empty.`);
-            }
+            handleRoomDeletion(io, rooms, disconnectedRoomId, room);
         } 
         
         console.log("Online", connectedUsers.size);
