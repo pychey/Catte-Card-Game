@@ -1,23 +1,23 @@
 import * as roomServices from '../services/room.socket.service.js';
 import { faker } from "@faker-js/faker";
 
-export const createRoom = (socket, io, rooms, roomName, playerName) => {
+export const createRoom = (socket, io, rooms, roomName) => {
     if (socket.data.roomId) return socket.emit('room-error','You are already in a room');
 
     const roomId = faker.string.alphanumeric(6).toUpperCase();
-    roomServices.handleRoomCreation(socket, rooms, roomId, roomName, playerName);
+    roomServices.handleRoomCreation(socket, rooms, roomId, roomName);
 
     socket.emit('room-success', {roomId, message: 'Room created successfully'});
     io.emit('room-update', {roomId, roomName, playerCount: 1});
     console.log('Room created', roomId);
 }
 
-export const joinRoom = (socket, io, rooms, roomId, playerName) => {
+export const joinRoom = (socket, io, rooms, roomId) => {
     if (socket.data.roomId) return socket.emit('room-error','You are already in a room');
     if (!rooms.has(roomId)) return socket.emit('room-error','Room not found');
 
     const room = rooms.get(roomId);
-    roomServices.handleRoomJoin(socket, roomId, room, playerName);
+    roomServices.handleRoomJoin(socket, roomId, room);
 
     socket.emit('room-success', {roomId, message: 'Join room successfully'});
     io.emit('room-update', {roomId, playerCount: room.players.length});

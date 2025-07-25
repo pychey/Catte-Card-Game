@@ -1,3 +1,5 @@
+import { saveGameHistory } from "./history.service.js";
+
 export const buildDeck = () => {
     const values = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'A', 'J', 'Q', 'K'];
     const suits = ['clubs', 'diamonds', 'hearts', 'spades'];
@@ -33,10 +35,10 @@ export const startGame = (room) => {
 }
 
 export const notifyPlayerTurns = (room, io, currentPlayer) => {
-    io.to(currentPlayer.id).emit('your-turn', { yourCard: currentPlayer.cards });
+    io.to(currentPlayer.socketId).emit('your-turn', { yourCard: currentPlayer.cards });
     for (const player of room.players) {
-        if (player.id !== currentPlayer.id) {
-            io.to(player.id).emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
+        if (player.socketId !== currentPlayer.socketId) {
+            io.to(player.socketId).emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
         }
     }
 };
@@ -56,11 +58,46 @@ export const handleCardPlay = (socket, room, currentTurnIndex, playerCard) => {
     }
 }
 
+export const removeCardFromPlayer = (player, card) => {
+    player.cards = player.cards.filter(c => !(c.value === card.value && c.suit === card.suit));
+};
+
+export const handleRoundCompletion = (room, io) => {
+    const winnerPlayer = room.players[room.cardWinner.playerIndex];
+    io.to(room.id).emit('round-winner', { winnerPlayer: winnerPlayer.name, winningCard: room.cardWinner.card });
+    winnerPlayer.hasTong = true;
+    room.roundNumber += 1;
+
+    if (room.roundNumber === 5) {
+        room.firstPlayerToHitIndex = room.cardWinner.playerIndex;
+        room.cardWinner = undefined;
+        
+        return setTimeout(() => {
+            io.to(winnerPlayer.socketId).emit('your-turn', { message: 'Your turn to hit', yourCard: winnerPlayer.cards });
+            for (const player of room.players) {
+                if (player.socketId !== winnerPlayer.socketId  && player.hasTong) {
+                    io.to(player.socketId).emit('not-your-turn', { message: `Wait for ${winnerPlayer.name} to hit` });
+                } else if (player.socketId !== winnerPlayer.socketId  && !player.hasTong) {
+                    io.to(player.socketId).emit('not-your-turn', { message: 'You have lost by not having Tong' });
+                }
+            }
+        }, 1000);
+    }
+
+    room.firstPlayerIndex = room.cardWinner.playerIndex;
+    room.currentTurnIndex = room.firstPlayerIndex;
+    room.cardWinner = undefined;
+
+    setTimeout(() => {
+        notifyPlayerTurns(room, io, winnerPlayer);
+    }, 1000);
+};
+
 export const handleCardHit = (socket, io, room, playerCard) => {
     if (!room.hasHitCard) {
         const firstPlayerToHitIndex = room.firstPlayerToHitIndex;
         const firstPlayerToHit = room.players[firstPlayerToHitIndex];
-        if(socket.id !== firstPlayerToHit.id) return socket.emit('not-your-turn', { message: `Wait for ${firstPlayerToHit.name} to hit` });
+        if(socket.id !== firstPlayerToHit.socketId) return socket.emit('not-your-turn', { message: `Wait for ${firstPlayerToHit.name} to hit` });
 
         removeCardFromPlayer(firstPlayerToHit, playerCard);
 
@@ -73,13 +110,13 @@ export const handleCardHit = (socket, io, room, playerCard) => {
 
         io.to(socket.data.roomId).emit('card-hit', { playerName: firstPlayerToHit.name, playerCard: { cardHit: playerCard, cardUnder: 'Unrevealed'} });
         for (const player of room.players) {
-            if (player.id !== firstPlayerToHit.id && player.hasTong) {
-                io.to(player.id).emit('your-turn', { message: `Hit or Throw`, yourCard: player.cards});
+            if (player.socketId !== firstPlayerToHit.socketId && player.hasTong) {
+                io.to(player.socketId).emit('your-turn', { message: `Hit or Throw`, yourCard: player.cards});
             }
         }
     } else {
-        const hittingPlayer = room.players.find(p => p.id === socket.id);
-        const remainingPlayers = room.players.filter(p => p.hasTong && !p.hasHitCard && p.id !== hittingPlayer.id).map(p => p.name);
+        const hittingPlayer = room.players.find(p => p.socketId === socket.id);
+        const remainingPlayers = room.players.filter(p => p.hasTong && !p.hasHitCard && p.socketId !== hittingPlayer.socketId).map(p => p.name);
 
         if (hittingPlayer.hasHitCard) return socket.emit('not-your-turn', { message: 'You already hit your card'});
 
@@ -98,44 +135,9 @@ export const handleCardHit = (socket, io, room, playerCard) => {
     }
 }
 
-export const removeCardFromPlayer = (player, card) => {
-    player.cards = player.cards.filter(c => !(c.value === card.value && c.suit === card.suit));
-};
-
-export const handleRoundCompletion = (room, io) => {
-    const winnerPlayer = room.players[room.cardWinner.playerIndex];
-    io.to(room.id).emit('round-winner', { winnerPlayer: winnerPlayer.name, winningCard: room.cardWinner.card });
-    winnerPlayer.hasTong = true;
-    room.roundNumber += 1;
-
-    if (room.roundNumber === 5) {
-        room.firstPlayerToHitIndex = room.cardWinner.playerIndex;
-        room.cardWinner = undefined;
-        
-        return setTimeout(() => {
-            io.to(winnerPlayer.id).emit('your-turn', { message: 'Your turn to hit', yourCard: winnerPlayer.cards });
-            for (const player of room.players) {
-                if (player.id !== winnerPlayer.id  && player.hasTong) {
-                    io.to(player.id).emit('not-your-turn', { message: `Wait for ${winnerPlayer.name} to hit` });
-                } else if (player.id !== winnerPlayer.id  && !player.hasTong) {
-                    io.to(player.id).emit('not-your-turn', { message: 'You have lost by not having Tong' });
-                }
-            }
-        }, 1000);
-    }
-
-    room.firstPlayerIndex = room.cardWinner.playerIndex;
-    room.currentTurnIndex = room.firstPlayerIndex;
-    room.cardWinner = undefined;
-
-    setTimeout(() => {
-        notifyPlayerTurns(room, io, winnerPlayer);
-    }, 1000);
-};
-
 export const handleCardThrow = (socket, io, room, playerCard) => {
-    const throwingPlayer = room.players.find(p => p.id === socket.id);
-    const remainingPlayers = room.players.filter(p => p.hasTong && !p.hasHitCard && p.id !== throwingPlayer.id).map(p => p.name);
+    const throwingPlayer = room.players.find(p => p.socketId === socket.id);
+    const remainingPlayers = room.players.filter(p => p.hasTong && !p.hasHitCard && p.socketId !== throwingPlayer.socketId).map(p => p.name);
 
     if (throwingPlayer.hasHitCard) return socket.emit('not-your-turn', { message: 'You already hit your card'});
     if (playerCard.suit !== room.winningHitCard.suit) return socket.emit('card-error', { message: 'Card need to be the same suit' });
@@ -189,7 +191,7 @@ export const handleShowResult = (socket, io, room) => {
         }
     }
 
-    setTimeout(() => {
+    setTimeout(async () => {
         io.to(socket.data.roomId).emit('game-result', {
             gameWinner: {
                 name: gameWinner.name,
@@ -197,9 +199,10 @@ export const handleShowResult = (socket, io, room) => {
                 revealedCard: gameWinner.underCard
             }
         });
+        await saveGameHistory(room, gameWinner);
     }, 2000);
 
-    room.lastWinnerIndex = room.players.findIndex(p => p.id === gameWinner.id);
+    room.lastWinnerIndex = room.players.findIndex(p => p.socketId === gameWinner.socketId);
 }
 
 export const setDefaultRoom = (room) => {

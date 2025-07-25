@@ -10,7 +10,7 @@ export const startGame = (socket, io, rooms) => {
     gameServices.shuffleDeck(room.deck);
     gameServices.startGame(room);
 
-    room.players.forEach(player => io.to(player.id).emit('game-started', { yourCard: player.cards }));
+    room.players.forEach(player => io.to(player.socketId).emit('game-started', { yourCard: player.cards }));
 
     gameServices.setDefaultRoom(room);
     const firstPlayer = room.players[room.firstPlayerIndex];
@@ -21,7 +21,7 @@ export const playCard = (socket, io, rooms, playerCard) => {
     const room = rooms.get(socket.data.roomId);
     const currentTurnIndex = room.currentTurnIndex;
     const currentPlayer = room.players[currentTurnIndex];
-    if(socket.id !== currentPlayer.id) return socket.emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
+    if(socket.id !== currentPlayer.socketId) return socket.emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
 
     gameServices.handleCardPlay(socket, room, currentTurnIndex, playerCard);
     gameServices.removeCardFromPlayer(currentPlayer, playerCard);
@@ -36,7 +36,7 @@ export const foldCard = (socket, io, rooms, playerCard) => {
     const room = rooms.get(socket.data.roomId);
     const currentTurnIndex = room.currentTurnIndex;
     const currentPlayer = room.players[currentTurnIndex];
-    if(socket.id !== currentPlayer.id) return socket.emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
+    if(socket.id !== currentPlayer.socketId) return socket.emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
 
     if(!room.cardWinner) return socket.emit('card-error', { message: `First player has to play` });
     gameServices.removeCardFromPlayer(currentPlayer, playerCard);
@@ -49,14 +49,14 @@ export const foldCard = (socket, io, rooms, playerCard) => {
 
 export const hitCard = (socket, io, rooms, playerCard) => {
     const room = rooms.get(socket.data.roomId);
-    if(!room.players.find(p => p.id === socket.id)?.hasTong) return socket.emit('not-your-turn', { message: 'You have lost by not having Tong' });
+    if(!room.players.find(p => p.socketId === socket.id)?.hasTong) return socket.emit('not-your-turn', { message: 'You have lost by not having Tong' });
 
     gameServices.handleCardHit(socket, io, room, playerCard);
 }
 
 export const throwCard = (socket, io, rooms, playerCard) => {
     const room = rooms.get(socket.data.roomId);
-    if(!room.players.find(p => p.id === socket.id)?.hasTong) return socket.emit('not-your-turn', { message: 'You have lost by not having Tong' });
+    if(!room.players.find(p => p.socketId === socket.id)?.hasTong) return socket.emit('not-your-turn', { message: 'You have lost by not having Tong' });
     if (!room.hasHitCard) return socket.emit('card-error', { message: 'Cannot throw without having any card hit'});
 
     gameServices.handleCardThrow(socket, io, room, playerCard);
