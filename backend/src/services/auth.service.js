@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import Player from "../models/player.js";
+import Player from "../models/player.model.js";
 
 export const createPlayer = async (username, password) => {
     if ( password.length < 6 ) throw new Error('Password must be at least 6 character');

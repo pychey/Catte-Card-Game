@@ -1,10 +1,10 @@
 import express from "express";
-import sequelize from "./utils/database.js";
+import sequelize from "./utils/database.utils.js";
 import dotenv from "dotenv";
-import './models/index.js';
+import './models/index.model.js';
 import authRouter from './routes/auth.route.js'
-import { app, server } from "./utils/socket.js";
-import "./socket/index.js";
+import { app, server } from "./utils/socket.utils.js";
+import "./socket/index.socket.js";
 
 sequelize.sync();
 
