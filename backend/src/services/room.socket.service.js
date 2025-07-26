@@ -1,5 +1,4 @@
 export const handleRoomCreation = (socket, rooms, roomId, roomName) => {
-    if (!socket.data.player) return socket.emit('room-error', 'Please authenticate first');
     rooms.set(roomId, { name: roomName, players: [{ socketId: socket.id, playerId: socket.data.player.id, name: socket.data.playerName, cards: [] }]});
 
     socket.join(roomId);
@@ -7,7 +6,6 @@ export const handleRoomCreation = (socket, rooms, roomId, roomName) => {
 }
 
 export const handleRoomJoin = (socket, roomId, room) => {
-    if (!socket.data.player) return socket.emit('room-error', 'Please authenticate first');
     room.players.push({ socketId: socket.id, playerId: socket.data.player.id, name: socket.data.playerName, cards: [] });
 
     socket.join(roomId);

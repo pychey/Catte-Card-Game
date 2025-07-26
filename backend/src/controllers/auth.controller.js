@@ -1,4 +1,5 @@
 import * as authService from '../services/auth.service.js';
+import { generateAccessToken } from '../utils/jwt.utils.js';
 import { faker } from '@faker-js/faker';
 
 export const createPlayer = async (req,res) => {
@@ -7,7 +8,9 @@ export const createPlayer = async (req,res) => {
 
     try {
         const playerCreated = await authService.createPlayer(username, password);
-        res.status(201).json({ data: playerCreated });
+        const token = generateAccessToken(playerCreated);
+
+        res.status(201).json({ data: { token, player: { id: playerCreated.id, username: playerCreated.username, rank: playerCreated.rank, isGuest: playerCreated.isGuest }}});
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -19,31 +22,35 @@ export const getPlayer = async (req,res) => {
     
     try {
         const player = await authService.getPlayer(username, password);
-        res.status(200).json({ data: player });
+        const token = generateAccessToken(player);
+
+        res.status(200).json({ data: { token, player: { id: player.id, username: player.username, rank: player.rank, isGuest: player.isGuest }}});
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 }
 
 export const updatePlayer = async (req, res) => {
-    const { username, newUsername } = req.body;
-    if ( !username || !newUsername ) return res.status(400).json({ message: 'Current username and updated username are required' });
+    const { newUsername } = req.body;
+    const currentUsername = req.player.username;
+    if (!newUsername) return res.status(400).json({ message: 'New username is required' });
 
     try {
-        const updatedPlayer = await authService.updatePlayer(newUsername, username);
-        res.status(200).json({ data: updatedPlayer });
+        const updatedPlayer = await authService.updatePlayer(newUsername, currentUsername);
+        const token = generateAccessToken(updatedPlayer);
+
+        res.status(200).json({ data: { token, player: { id: updatedPlayer.id, username: updatedPlayer.username, rank: updatedPlayer.rank, isGuest: updatedPlayer.isGuest }}});
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
 export const deletePlayer = async (req, res) => {
-    const { username } = req.body;
-    if ( !username ) return res.status(400).json({ message: 'Username is required' });
+    const username = req.player.username;
 
     try {
         const deletedPlayer = await authService.deletePlayer(username);
-        res.status(200).json({ data: deletedPlayer });
+        res.status(200).json({ data: { message: 'Player deleted successfully', player: { id: deletedPlayer.id, username: deletedPlayer.username, rank: deletedPlayer.rank, isGuest: deletedPlayer.isGuest }}});
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -54,20 +61,30 @@ export const createGuest = async (req, res) => {
 
     try {
         const guest = await authService.createGuest(guestName);
-        res.status(201).json({ data: guest });
+        const token = generateAccessToken(guest);
+
+        res.status(201).json({ data: { token, player: { id: guest.id, username: guest.username, rank: guest.rank, isGuest: guest.isGuest }}});
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 }
 
 export const convertGuestToPlayer = async (req, res) => {
-    const { guestName, username, password } = req.body;
-    if ( !guestName || !username || !password ) return res.status(400).json({ message: 'Username and password are required' });
+    const { username, password } = req.body;
+    const guestName = req.player.username;
+    
+    if (!username || !password) return res.status(400).json({ message: 'Username and password are required' });
     
     try {
         const convertedPlayer = await authService.convertGuestToPlayer(guestName, username, password);
-        res.status(200).json({ data: convertedPlayer });
+        const token = generateAccessToken(convertedPlayer);
+        
+        res.status(200).json({ data: { token, player: { id: convertedPlayer.id, username: convertedPlayer.username, rank: convertedPlayer.rank, isGuest: convertedPlayer.isGuest }}});
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 }
+
+export const verifyToken = async (req, res) => {
+    res.status(200).json({  data: { valid: true, player: { id: req.player.id, username: req.player.username, rank: req.player.rank, isGuest: req.player.isGuest }}});
+};
