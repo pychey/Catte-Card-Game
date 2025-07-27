@@ -23,13 +23,18 @@ export const playCard = (socket, io, rooms, playerCard) => {
     const currentPlayer = room.players[currentTurnIndex];
     if(socket.id !== currentPlayer.socketId) return socket.emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
 
-    gameServices.handleCardPlay(socket, room, currentTurnIndex, playerCard);
+    const response = gameServices.handleCardPlay(socket, room, currentTurnIndex, playerCard);
+    if (!response.success) return;
     gameServices.removeCardFromPlayer(currentPlayer, playerCard);
 
     io.to(socket.data.roomId).emit('card-played', { playerName: currentPlayer.name, playerCard });
 
     room.currentTurnIndex = (currentTurnIndex + 1) % room.players.length;
     if (room.currentTurnIndex === room.firstPlayerIndex) return gameServices.handleRoundCompletion(room, io);
+    else {
+        const nextPlayer = room.players[room.currentTurnIndex];
+        gameServices.notifyPlayerTurns(room, io, nextPlayer);
+    }
 }
 
 export const foldCard = (socket, io, rooms, playerCard) => {
@@ -45,6 +50,10 @@ export const foldCard = (socket, io, rooms, playerCard) => {
 
     room.currentTurnIndex = (currentTurnIndex + 1) % room.players.length;
     if (room.currentTurnIndex === room.firstPlayerIndex) return gameServices.handleRoundCompletion(room, io);
+    else {
+        const nextPlayer = room.players[room.currentTurnIndex];
+        gameServices.notifyPlayerTurns(room, io, nextPlayer);
+    }
 }
 
 export const hitCard = (socket, io, rooms, playerCard) => {

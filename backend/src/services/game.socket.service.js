@@ -35,10 +35,10 @@ export const startGame = (room) => {
 }
 
 export const notifyPlayerTurns = (room, io, currentPlayer) => {
-    io.to(currentPlayer.socketId).emit('your-turn', { yourCard: currentPlayer.cards });
+    io.to(currentPlayer.socketId).emit('your-turn', { message: 'Your turn to play!', yourCard: currentPlayer.cards });
     for (const player of room.players) {
         if (player.socketId !== currentPlayer.socketId) {
-            io.to(player.socketId).emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn` });
+            io.to(player.socketId).emit('not-your-turn', { message: `Wait for ${currentPlayer.name} turn`, yourCard: player.cards });
         }
     }
 };
@@ -56,6 +56,7 @@ export const handleCardPlay = (socket, room, currentTurnIndex, playerCard) => {
         if (isWin) room.cardWinner = { playerIndex: currentTurnIndex, card: playerCard };
         else return socket.emit('card-error', { message: 'Card is not higher' });
     }
+    return { success: true };
 }
 
 export const removeCardFromPlayer = (player, card) => {
@@ -73,10 +74,10 @@ export const handleRoundCompletion = (room, io) => {
         room.cardWinner = undefined;
         
         return setTimeout(() => {
-            io.to(winnerPlayer.socketId).emit('your-turn', { message: 'Your turn to hit', yourCard: winnerPlayer.cards });
+            io.to(winnerPlayer.socketId).emit('your-turn', { message: 'Your turn to Hit!', yourCard: winnerPlayer.cards });
             for (const player of room.players) {
                 if (player.socketId !== winnerPlayer.socketId  && player.hasTong) {
-                    io.to(player.socketId).emit('not-your-turn', { message: `Wait for ${winnerPlayer.name} to hit` });
+                    io.to(player.socketId).emit('not-your-turn', { message: `Wait for ${winnerPlayer.name} to hit`, yourCard: player.cards });
                 } else if (player.socketId !== winnerPlayer.socketId  && !player.hasTong) {
                     io.to(player.socketId).emit('not-your-turn', { message: 'You have lost by not having Tong' });
                 }
