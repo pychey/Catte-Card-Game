@@ -134,6 +134,11 @@ export const handleCardHit = (socket, io, room, playerCard) => {
 
         if (hittingPlayer.hasHitCard) return socket.emit('not-your-turn', { message: 'You already hit your card'});
 
+        const isSuitSame = playerCard.suit === room.winningHitCard.suit;
+        if (isSuitSame) {
+            const isThrow = isCardHigher(playerCard, room.winningHitCard);
+            if (isThrow) return socket.emit('card-error', { message: 'Card is supposed to be Throw!'});
+        }
         removeCardFromPlayer(socket, hittingPlayer, playerCard);
         hittingPlayer.hasHitCard = true;
         hittingPlayer.hitCard = playerCard;
@@ -203,7 +208,7 @@ export const handleShowResult = (socket, io, room) => {
             hitCard: winningHitCardPlayer.hitCard,
             revealedCard: winningHitCardPlayer.underCard
         },
-        otherTongPlayer: resultRevealed.filter(result => result.player.id !== winningHitCardPlayer.id).map(result => ({
+        otherTongPlayer: resultRevealed.filter(result => result.player.playerId !== winningHitCardPlayer.playerId).map(result => ({
             name: result.player.name,
             hitCard: result.hitCard,
             revealedCard: result.revealedCard

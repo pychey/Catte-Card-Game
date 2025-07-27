@@ -78,3 +78,11 @@ export const showResult = (socket, io, rooms) => {
     gameServices.handleShowResult(socket, io, room);
     gameServices.setDefaultRoom(room);
 }
+
+export const restartGameForAll = (socket, io, rooms) => {
+    if(!socket.data.roomId) return socket.emit('game-error', { message: 'You are not in a room'});
+    const roomId = socket.data.roomId;
+    const room = rooms.get(roomId);
+    gameServices.setDefaultRoom(room);
+    io.to(roomId).emit('game-restarted');
+}

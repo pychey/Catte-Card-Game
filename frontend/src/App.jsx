@@ -65,6 +65,7 @@ const App = () => {
 
       // Room events
       newSocket.on('room-success', (data) => {
+        setRoomId(data.roomId);
         setMessage(data.message);
         setCurrentRoute('/room');
         newSocket.emit('get-room-info');
@@ -98,10 +99,15 @@ const App = () => {
 
       // Game events
       newSocket.on('game-started', (data) => {
+        setGameResult(null);
         setGameStarted(true);
         setMyCards(data.yourCard);
         setGamePhase('Playing');
         setRoundNumber(1);
+      });
+
+      newSocket.on('game-restarted', () => {
+        restartGame();
       });
 
       newSocket.on('your-turn', (data) => {
@@ -141,7 +147,6 @@ const App = () => {
       newSocket.on('round-winner', (data) => {
         setMessage(`${data.winnerPlayer} wins the round!`);
         setRoundNumber(prev => prev + 1);
-        setTimeout(() => setMessage(''), 5000);
       });
 
       newSocket.on('card-hit', (data) => {
@@ -167,13 +172,11 @@ const App = () => {
       newSocket.on('all-hit', (data) => {
         setMessage(data.message);
         setGamePhase('Revealing');
-        setTimeout(() => setMessage(''), 4000);
       });
 
       newSocket.on('reveal-card', (data) => {
         setGamePhase('Revealing');
         setMessage(data.message);
-        // Update hit cards with revealed information
         const allRevealed = [
           data.winningHitCardPlayer,
           ...data.otherTongPlayer,
@@ -186,6 +189,7 @@ const App = () => {
           }))
         );
       });
+
       newSocket.on('room-update', (data) => {
         if (data.message && data.message.includes('deleted')) {
           // Room was deleted
@@ -222,7 +226,6 @@ const App = () => {
         setGameResult(data.gameWinner);
         setGamePhase('Finished');
         setMessage(`${data.gameWinner.name} wins the game!`);
-        setTimeout(() => setMessage(''), 5000);
       });
 
       newSocket.on('game-error', (error) => {
@@ -240,6 +243,16 @@ const App = () => {
       };
     }
   }, [token]);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => {
+        setMessage('');
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   const handleAuth = async (mode) => {
     setLoading(true);
@@ -272,7 +285,6 @@ const App = () => {
         localStorage.setItem('token', data.data.token);
         setPlayer(data.data.player);
         setMessage('Authentication successful!');
-        setTimeout(() => setMessage(''), 4000);
       } else {
         setMessage(data.message);
       }
@@ -313,6 +325,7 @@ const App = () => {
 
   const playCard = () => {
     setMessage('')
+    setTurnMessage('')
     if (socket && selectedCard) {
       socket.emit('play-card', selectedCard);
       setSelectedCard(null);
@@ -322,6 +335,7 @@ const App = () => {
 
   const foldCard = () => {
     setMessage('')
+    setTurnMessage('')
     if (socket && selectedCard) {
       socket.emit('fold-card', selectedCard);
       setSelectedCard(null);
@@ -331,6 +345,7 @@ const App = () => {
 
   const hitCard = () => {
     setMessage('')
+    setTurnMessage('')
     if (socket && selectedCard) {
       socket.emit('hit-card', selectedCard);
       setSelectedCard(null);
@@ -340,6 +355,7 @@ const App = () => {
 
   const throwCard = () => {
     setMessage('')
+    setTurnMessage('')
     if (socket && selectedCard) {
       socket.emit('throw-card', selectedCard);
       setSelectedCard(null);
@@ -377,7 +393,6 @@ const App = () => {
     setMyCards([]);
     setPlayedCards([]);
     setHitCards([]);
-    setGameResult(null);
     setRoundNumber(undefined);
     setSelectedCard(null);
     setSelectedCardIndex(null);
@@ -386,7 +401,7 @@ const App = () => {
   };
 
   const getCardImage = (card) => {
-    if (!card || card === 'folded') return '/assets/BACK.png';
+    if (!card || card === 'folded' || card === 'Unrevealed') return '/assets/BACK.png';
     return `/assets/${card.suit}_${card.value}.png`;
   };
 
@@ -845,7 +860,7 @@ const App = () => {
         {/* Game Header */}
         <div className="bg-white rounded-lg p-4 mb-4">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">Catte Card Game</h1>
+            <h1 className="text-2xl font-bold">Catte Card Game - {roomId}</h1>
             <div className="flex gap-4 justify-between items-center">
               {roundNumber == 0 && (<span className="text-sm">Round: {roundNumber}</span>)}
               <span className="text-sm">Phase: {gamePhase}</span>
@@ -857,23 +872,12 @@ const App = () => {
                   Start Game
                 </button>
               )}
-              {gamePhase === 'Finished' && (
-                <button
-                  onClick={restartGame}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                >
-                  New Game
-                </button>
-              )}
             </div>
           </div>
         </div>
 
         {/* Game Table */}
-        <div
-          className="bg-green-600 rounded-lg p-8 mb-4 relative"
-          style={{ minHeight: '600px' }}
-        >
+        <div className="bg-green-600 rounded-lg p-8 mb-4 relative h-[500px]">
           {/* Center area - played cards or hit cards */}
           <div className="absolute inset-0 flex items-center justify-center">
             {/* Other Players - positioned around the center */}
@@ -906,7 +910,7 @@ const App = () => {
               );
             })}
 
-            <div className="bg-green-700 rounded-lg p-4 min-w-64 min-h-32 mb-20">
+            <div className="bg-green-700 rounded-lg p-3 min-w-48 min-h-24 mb-20">
               {gamePhase === 'Playing' && playedCards.length > 0 && (
                 <div className="text-white text-center mb-2">Played Cards</div>
               )}
@@ -920,7 +924,7 @@ const App = () => {
                     <img
                       src={getCardImage(play.card)}
                       alt="card"
-                      className="w-16 h-24 rounded shadow-lg"
+                      className="w-12 h-18 rounded shadow-lg"
                     />
                     <div className="text-white text-xs mt-1">{play.player.slice(0, 7)}</div>
                   </div>
@@ -933,7 +937,7 @@ const App = () => {
                         <img
                           src={getCardImage(hit.cardHit)}
                           alt="hit card"
-                          className="w-16 h-24 rounded shadow-lg"
+                          className="w-12 h-18 rounded shadow-lg"
                         />
                         <div className="text-white text-xs">Hit</div>
                       </div>
@@ -942,13 +946,13 @@ const App = () => {
                           <img
                             src={getCardImage(hit.cardUnder)}
                             alt="under card"
-                            className="w-16 h-24 rounded shadow-lg"
+                            className="w-12 h-18 rounded shadow-lg"
                           />
                           <div className="text-white text-xs">Under</div>
                         </div>
                       )}
                     </div>
-                    <div className="text-white text-xs mt-1">{hit.player}</div>
+                    <div className="text-white text-xs mt-1">{hit.player.slice(0,7)}</div>
                   </div>
                 ))}
               </div>
@@ -957,10 +961,10 @@ const App = () => {
 
           {/* Player's Cards - Bottom of Table */}
           {gameStarted && myCards.length > 0 && (
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-full max-w-4xl">
+            <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-full max-w-4xl">
               {/* Action Buttons - shown when card is selected */}
               {selectedCard && (
-                <div className="mb-10 flex justify-center gap-4">
+              <div className="mb-6 flex justify-center gap-4">
                   {gamePhase === 'Playing' && isMyTurn && (
                     <>
                       <button
@@ -996,11 +1000,6 @@ const App = () => {
                 </div>
               )}
 
-              {/* Player Name and Turn Indicator */}
-              <div className="text-white text-center font-bold mb-8">
-                {player?.username} {isMyTurn ? '(Your Turn)' : ''}
-              </div>
-
               {/* Player's Cards */}
               <div className="flex gap-4 justify-center mb-2">
                 {myCards.map((card, index) => (
@@ -1029,10 +1028,27 @@ const App = () => {
           )}
         </div>
 
-        {/* Game Messages */}
+        {/* Notification */}
         {message && (
-          <div className="mt-4 bg-yellow-100 border-l-4 border-yellow-500 p-4">
-            <p className="text-yellow-800">{message}</p>
+          <div className="fixed top-30 right-6 z-50 max-w-sm">
+            <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-4 transform transition-all duration-300 ease-in-out animate-slide-in">
+              <div className="flex items-center justify-center">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <p className="text-sm font-medium text-gray-900 text-center">{message.toUpperCase()}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMessage('')}
+                  className="ml-4 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <span className="text-lg">&times;</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1055,33 +1071,56 @@ const App = () => {
           </div>
         )}
 
-        {/* Game Result */}
+        {/* Game Result Popup */}
         {gameResult && (
-          <div className="mt-4 bg-white rounded-lg p-6 text-center">
-            <h2 className="text-2xl font-bold text-green-800 mb-4">
-              Game Winner!
-            </h2>
-            <p className="text-xl">{gameResult.name} wins!</p>
-            {gameResult.hitCard && (
-              <div className="flex justify-center gap-4 mt-4">
-                <div className="text-center">
-                  <img
-                    src={getCardImage(gameResult.hitCard)}
-                    alt="winning hit card"
-                    className="w-20 h-28 rounded shadow-lg mx-auto"
-                  />
-                  <p className="text-sm mt-1">Hit Card</p>
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-8 text-center max-w-md w-full mx-4 shadow-2xl">
+              <h2 className="text-3xl font-bold text-green-800 mb-4">
+                Game Over!
+              </h2>
+              <p className="text-2xl font-semibold mb-2">
+                {gameResult.name === player?.username ? (
+                  <span className="text-green-600">You've Won!</span>
+                ) : (
+                  <span className="text-red-600">You've Lost</span>
+                )}
+              </p>
+              <p className="text-2xl font-semibold text-gray-600 mb-6">{gameResult.name} wins!</p>
+              
+              {gameResult.hitCard && (
+                <div className="flex justify-center gap-4 mb-6">
+                  <div className="text-center">
+                    <img
+                      src={getCardImage(gameResult.hitCard)}
+                      alt="winning hit card"
+                      className="w-20 h-28 rounded shadow-lg mx-auto"
+                    />
+                    <p className="text-sm mt-2 font-medium">Hit Card</p>
+                  </div>
+                  <div className="text-center">
+                    <img
+                      src={getCardImage(gameResult.revealedCard)}
+                      alt="winning revealed card"
+                      className="w-20 h-28 rounded shadow-lg mx-auto"
+                    />
+                    <p className="text-sm mt-2 font-medium">Under Card</p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <img
-                    src={getCardImage(gameResult.revealedCard)}
-                    alt="winning revealed card"
-                    className="w-20 h-28 rounded shadow-lg mx-auto"
-                  />
-                  <p className="text-sm mt-1">Under Card</p>
-                </div>
-              </div>
-            )}
+              )}
+              
+              <button
+                onClick={() => {
+                  setGameResult(null);
+                  restartGame();
+                  if (socket) {
+                    socket.emit('restart-game-for-all');
+                  }
+                }}
+                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors font-semibold text-lg"
+              >
+                Play Again
+              </button>
+            </div>
           </div>
         )}
       </div>

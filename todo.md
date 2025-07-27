@@ -1,10 +1,7 @@
-3. Make table of 4 player, 100vh screen //claude
+3. Remove BackCard From Players
 4. Leave room //claude
 5. Display all rooms //claude
 6. Display room Id in room //claude
-12.remove message when game start or play card done //claude
-14.implement guest convert to player //claude
-7. Logout //claude
 
 //Optional
 b. Player can view their history //claude
