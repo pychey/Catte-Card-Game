@@ -8,18 +8,27 @@ export const getPlayerHistory = async (playerId) => {
             model: Player,
             where: { id: playerId },
             through: { attributes: [] }
-        }]
+        }],
+        order: [['createdAt', 'DESC']],
+        limit: 20 // Get last 20 games
     });
     
     const totalGames = histories.length;
     const wins = histories.filter(h => h.result === 'Won').length;
     const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : 0;
     
+    // Format recent games for frontend
+    const recentGames = histories.slice(0, 10).map(history => ({
+        result: history.result === 'Won' ? 'win' : 'lost', // Convert "Won" to "win", "Lost" to "lost"
+        date: new Date(history.createdAt).toLocaleDateString()
+    }));
+    
     return {
         totalGames,
         wins,
         losses: totalGames - wins,
-        winRate: `${winRate}%`
+        winRate: `${winRate}%`,
+        recentGames
     };
 };
 
