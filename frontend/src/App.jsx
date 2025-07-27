@@ -32,11 +32,21 @@ const App = () => {
   const [gamePhase, setGamePhase] = useState('waiting'); // waiting, playing, hitting, revealing, finished
   const [hitCards, setHitCards] = useState([]);
   const [gameResult, setGameResult] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  //Add state for profile
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  //Game history
+
+  const [showHistory, setShowHistory] = useState(false);
+  const [playerHistory, setPlayerHistory] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (token && !socket) {
       const newSocket = io('http://localhost:5001', {
-        auth: { token }
+        auth: { token },
       });
 
       newSocket.on('authenticated', (data) => {
@@ -91,16 +101,22 @@ const App = () => {
       });
 
       newSocket.on('card-played', (data) => {
-        setPlayedCards(prev => [...prev, { player: data.playerName, card: data.playerCard }]);
+        setPlayedCards((prev) => [
+          ...prev,
+          { player: data.playerName, card: data.playerCard },
+        ]);
       });
 
       newSocket.on('card-folded', (data) => {
-        setPlayedCards(prev => [...prev, { player: data.playerName, card: 'folded' }]);
+        setPlayedCards((prev) => [
+          ...prev,
+          { player: data.playerName, card: 'folded' },
+        ]);
       });
 
       newSocket.on('card-removed', (data) => {
         if (data.yourCard) setMyCards(data.yourCard);
-      })
+      });
 
       newSocket.on('round-winner', (data) => {
         setMessage(`${data.winnerPlayer} wins the round!`);
@@ -109,14 +125,20 @@ const App = () => {
       });
 
       newSocket.on('card-hit', (data) => {
-        setHitCards(prev => [...prev, { player: data.playerName, ...data.playerCard }]);
+        setHitCards((prev) => [
+          ...prev,
+          { player: data.playerName, ...data.playerCard },
+        ]);
         if (data.remainingPlayers) {
           setMessage(`Waiting for: ${data.remainingPlayers.join(', ')}`);
         }
       });
 
       newSocket.on('card-throw', (data) => {
-        setHitCards(prev => [...prev, { player: data.playerName, ...data.playerCard }]);
+        setHitCards((prev) => [
+          ...prev,
+          { player: data.playerName, ...data.playerCard },
+        ]);
         if (data.remainingPlayers) {
           setMessage(`Waiting for: ${data.remainingPlayers.join(', ')}`);
         }
@@ -131,12 +153,48 @@ const App = () => {
         setGamePhase('revealing');
         setMessage(data.message);
         // Update hit cards with revealed information
-        const allRevealed = [data.winningHitCardPlayer, ...data.otherTongPlayer];
-        setHitCards(allRevealed.map(p => ({
-          player: p.name,
-          cardHit: p.hitCard,
-          cardUnder: p.revealedCard
-        })));
+        const allRevealed = [
+          data.winningHitCardPlayer,
+          ...data.otherTongPlayer,
+        ];
+        setHitCards(
+          allRevealed.map((p) => ({
+            player: p.name,
+            cardHit: p.hitCard,
+            cardUnder: p.revealedCard,
+          }))
+        );
+      });
+      newSocket.on('room-update', (data) => {
+        if (data.message && data.message.includes('deleted')) {
+          // Room was deleted
+          setRooms((prev) =>
+            prev.filter((room) => room.roomId !== data.roomId)
+          );
+        } else {
+          // Room was created or updated
+          setRooms((prev) => {
+            const existing = prev.find((room) => room.roomId === data.roomId);
+            if (existing) {
+              // Update existing room
+              return prev.map((room) =>
+                room.roomId === data.roomId
+                  ? { ...room, playerCount: data.playerCount }
+                  : room
+              );
+            } else {
+              // Add new room
+              return [
+                ...prev,
+                {
+                  roomId: data.roomId,
+                  roomName: data.roomName,
+                  playerCount: data.playerCount,
+                },
+              ];
+            }
+          });
+        }
       });
 
       newSocket.on('game-result', (data) => {
@@ -182,7 +240,7 @@ const App = () => {
       const response = await fetch(`http://localhost:5001${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: mode === 'guest' ? undefined : JSON.stringify(body)
+        body: mode === 'guest' ? undefined : JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -250,6 +308,23 @@ const App = () => {
     }
   };
 
+  const fetchPlayerHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch('http://localhost:5001/auth/history', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setPlayerHistory(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const restartGame = () => {
     setGameStarted(false);
     setGamePhase('waiting');
@@ -269,18 +344,26 @@ const App = () => {
   const renderAuthPage = () => (
     <div className="min-h-screen bg-green-800 flex items-center justify-center">
       <div className="bg-white p-8 rounded-lg shadow-lg w-96">
-        <h1 className="text-3xl font-bold text-center mb-6 text-green-800">Catte Card Game</h1>
-        
+        <h1 className="text-3xl font-bold text-center mb-6 text-green-800">
+          Catte Card Game
+        </h1>
+
         <div className="flex mb-4">
           <button
             onClick={() => setAuthMode('login')}
-            className={`flex-1 py-2 px-4 rounded-l ${authMode === 'login' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
+            className={`flex-1 py-2 px-4 rounded-l ${
+              authMode === 'login' ? 'bg-green-600 text-white' : 'bg-gray-200'
+            }`}
           >
             Login
           </button>
           <button
             onClick={() => setAuthMode('register')}
-            className={`flex-1 py-2 px-4 rounded-r ${authMode === 'register' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
+            className={`flex-1 py-2 px-4 rounded-r ${
+              authMode === 'register'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-200'
+            }`}
           >
             Register
           </button>
@@ -307,7 +390,11 @@ const App = () => {
               disabled={loading}
               className="w-full bg-green-600 text-white py-3 rounded hover:bg-green-700 disabled:opacity-50 mb-3"
             >
-              {loading ? 'Loading...' : authMode === 'login' ? 'Login' : 'Register'}
+              {loading
+                ? 'Loading...'
+                : authMode === 'login'
+                ? 'Login'
+                : 'Register'}
             </button>
           </>
         )}
@@ -321,7 +408,13 @@ const App = () => {
         </button>
 
         {message && (
-          <div className={`mt-4 p-3 rounded text-center ${message.includes('error') || message.includes('failed') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          <div
+            className={`mt-4 p-3 rounded text-center ${
+              message.includes('error') || message.includes('failed')
+                ? 'bg-red-100 text-red-700'
+                : 'bg-green-100 text-green-700'
+            }`}
+          >
             {message}
           </div>
         )}
@@ -332,11 +425,67 @@ const App = () => {
   const renderLobbyPage = () => (
     <div className="min-h-screen bg-green-800 p-4">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-green-800 mb-2">Game Lobby</h1>
-          <p className="text-gray-600">Welcome, {player?.username}!</p>
+        {/* Header with profile and logout */}
+        <div className="bg-white rounded-lg p-4 mb-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-lg cursor-pointer hover:bg-green-700 transition-colors"
+              onClick={() => setShowProfileModal(true)}
+            >
+              {player?.username?.charAt(0).toUpperCase()}
+            </div>
+            <span className="font-medium text-gray-800">
+              {player?.username}
+            </span>
+          </div>
+
+          {/* Make  when log out can log in again */}
+          <button
+            onClick={() => {
+              // Close socket first
+              if (socket) {
+                socket.close();
+                setSocket(null);
+              }
+
+              // Clear all states
+              setToken(null);
+              setPlayer(null);
+              setIsAuthenticated(false);
+              setCurrentRoute('/auth');
+
+              // Reset profile modal states
+              setShowProfileModal(false);
+              setShowHistory(false);
+              setPlayerHistory(null);
+
+              // Reset other states
+              setMessage('');
+              setRooms([]);
+
+              // Clear localStorage
+              localStorage.removeItem('token');
+            }}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors"
+          >
+            Logout
+          </button>
         </div>
 
+        <div className="bg-white rounded-lg p-6 mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-green-800 mb-2">
+              Game Lobby
+            </h1>
+            <p className="text-gray-600">Welcome, {player?.username}!</p>
+          </div>
+          <div
+            className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-300 transition-colors"
+            onClick={() => setShowHelpModal(true)}
+          >
+            <span className="text-gray-600 font-bold text-lg">?</span>
+          </div>
+        </div>
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg p-6">
             <h2 className="text-xl font-bold mb-4">Create Room</h2>
@@ -374,11 +523,270 @@ const App = () => {
         </div>
 
         {message && (
-          <div className={`mt-4 p-4 rounded text-center ${message.includes('error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          <div
+            className={`mt-4 p-4 rounded text-center ${
+              message.includes('error')
+                ? 'bg-red-100 text-red-700'
+                : 'bg-green-100 text-green-700'
+            }`}
+          >
             {message}
           </div>
         )}
+        {/* Active Rooms List */}
+        {rooms.length >= 0 && (
+          <div className="mt-6 bg-white rounded-lg p-6">
+            <h2 className="text-xl font-bold mb-4">Availible Rooms</h2>
+            <div className="space-y-2">
+              {rooms.length === 0 && (
+                <p className="text-gray-500">No active rooms available</p>
+              )}
+              {rooms.map((room) => (
+                <div
+                  key={room.roomId}
+                  className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
+                >
+                  <div>
+                    <span className="font-medium">{room.roomName}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600">
+                      {room.playerCount}/4 Players
+                    </span>
+                    <button
+                      onClick={() => socket.emit('join-room', room.roomId)}
+                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                    >
+                      Join
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-black/50 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl h-[80vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-green-800">
+                How to Play Catte
+              </h2>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-4 text-gray-700">
+              <div>
+                <h3 className="font-bold text-lg">Game Overview</h3>
+                <p>
+                  Catte is a trick-taking card game where players compete to win
+                  rounds and ultimately the game.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Setup</h3>
+                <p>
+                  Each player receives 6 cards. The game consists of 5 rounds of
+                  trick-taking.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Playing Rounds 1-5</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Players take turns playing one card</li>
+                  <li>Must follow suit if possible</li>
+                  <li>Can fold if unable to beat the highest card</li>
+                  <li>Highest card of the leading suit wins the trick</li>
+                  <li>Winner of each round gets "Tong" status</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Final Reveal Phase</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Only players with Tong can participate</li>
+                  <li>Players "hit" by playing one card face up</li>
+                  <li>Can "throw" to beat the current highest hit card</li>
+                  <li>After all players hit, cards are revealed</li>
+                  <li>Player with highest remaining card wins!</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Card Values</h3>
+                <p>
+                  2 (lowest) → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → J → Q → K → A
+                  (highest)
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Profile Modal */}
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/50 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md h-[80vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold  text-green-800">
+                Profile Information
+              </h2>
+
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="text-center mb-6">
+                <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-3">
+                  {player?.username?.charAt(0).toUpperCase()}
+                </div>
+                <h3 className="text-xl font-bold text-gray-800">
+                  {player?.username}
+                </h3>
+                <p className="text-gray-600">
+                  {player?.isGuest ? 'Guest Player' : 'Registered Player'}
+                </p>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded flex justify-between items-center">
+                <label className="font-semibold text-gray-700">
+                  Player ID:
+                </label>
+                <p className="text-gray-600">{player?.id}</p>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded flex justify-between items-center">
+                <label className="font-semibold text-gray-700">Rank:</label>
+                <p className="text-gray-600">{player?.rank || 0}</p>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded flex justify-between items-center">
+                <label className="font-semibold text-gray-700">
+                  Account Type:
+                </label>
+                <p className="text-gray-600">
+                  {player?.isGuest ? 'Guest Account' : 'Registered Account'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setShowHistory(true);
+                fetchPlayerHistory();
+              }}
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mt-4"
+            >
+              View Game History
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/50 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md h-[70vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-purple-800">
+  {!showHistory ? 'Profile Information' : 'Game History'}
+</h2>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-4">
+              {loadingHistory ? (
+                <div className="text-center py-8">
+                  <div className="text-lg">Loading history...</div>
+                </div>
+              ) : playerHistory ? (
+                <div className="space-y-4">
+                  <div className="bg-purple-50 p-4 rounded">
+                    <h3 className="font-semibold mb-2">Statistics</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {playerHistory.totalGames || 0}
+                        </div>
+                        <div className="text-xs text-gray-600">Total Games</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                          {playerHistory.wins || 0}
+                        </div>
+                        <div className="text-xs text-gray-600">Wins</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {playerHistory.winRate || 0}
+                        </div>
+                        <div className="text-xs text-gray-600">Win Rate</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {playerHistory.rank || 0}
+                        </div>
+                        <div className="text-xs text-gray-600">Rank</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded">
+                    <h3 className="font-semibold mb-2">Recent Games</h3>
+                    {playerHistory.recentGames &&
+                    playerHistory.recentGames.length > 0 ? (
+                      <div className="space-y-2">
+                        {playerHistory.recentGames.map((game, index) => (
+                          <div
+                            key={index}
+                            className="bg-white p-2 rounded border-l-4 border-gray-300"
+                          >
+                            <div className="text-sm">
+                              <span
+                                className={
+                                  game.result === 'win'
+                                    ? 'text-green-600'
+                                    : 'text-red-600'
+                                }
+                              >
+                                {game.result === 'win' ? 'Won' : 'Lost'}
+                              </span>
+                              <span className="text-gray-500 ml-2">
+                                {game.date}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm">
+                        No games played yet
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-2">📊</div>
+                  <p className="text-gray-500">No history available</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -413,7 +821,10 @@ const App = () => {
         </div>
 
         {/* Game Table */}
-        <div className="bg-green-600 rounded-lg p-8 mb-4 relative" style={{ minHeight: '600px' }}>
+        <div
+          className="bg-green-600 rounded-lg p-8 mb-4 relative"
+          style={{ minHeight: '600px' }}
+        >
           {/* Center area - played cards or hit cards */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="bg-green-700 rounded-lg p-4 min-w-64 min-h-32">
@@ -423,44 +834,50 @@ const App = () => {
               {gamePhase === 'hitting' || gamePhase === 'revealing' ? (
                 <div className="text-white text-center mb-2">Hit Cards</div>
               ) : null}
-              
+
               <div className="flex flex-wrap gap-2 justify-center">
-                {gamePhase === 'playing' && playedCards.map((play, index) => (
-                  <div key={index} className="text-center">
-                    <img
-                      src={getCardImage(play.card)}
-                      alt="card"
-                      className="w-16 h-24 rounded shadow-lg"
-                    />
-                    <div className="text-white text-xs mt-1">{play.player}</div>
-                  </div>
-                ))}
-                
-                {(gamePhase === 'hitting' || gamePhase === 'revealing') && hitCards.map((hit, index) => (
-                  <div key={index} className="text-center">
-                    <div className="flex gap-1">
-                      <div>
-                        <img
-                          src={getCardImage(hit.cardHit)}
-                          alt="hit card"
-                          className="w-16 h-24 rounded shadow-lg"
-                        />
-                        <div className="text-white text-xs">Hit</div>
+                {gamePhase === 'playing' &&
+                  playedCards.map((play, index) => (
+                    <div key={index} className="text-center">
+                      <img
+                        src={getCardImage(play.card)}
+                        alt="card"
+                        className="w-16 h-24 rounded shadow-lg"
+                      />
+                      <div className="text-white text-xs mt-1">
+                        {play.player}
                       </div>
-                      {gamePhase === 'revealing' && (
+                    </div>
+                  ))}
+
+                {(gamePhase === 'hitting' || gamePhase === 'revealing') &&
+                  hitCards.map((hit, index) => (
+                    <div key={index} className="text-center">
+                      <div className="flex gap-1">
                         <div>
                           <img
-                            src={getCardImage(hit.cardUnder)}
-                            alt="under card"
+                            src={getCardImage(hit.cardHit)}
+                            alt="hit card"
                             className="w-16 h-24 rounded shadow-lg"
                           />
-                          <div className="text-white text-xs">Under</div>
+                          <div className="text-white text-xs">Hit</div>
                         </div>
-                      )}
+                        {gamePhase === 'revealing' && (
+                          <div>
+                            <img
+                              src={getCardImage(hit.cardUnder)}
+                              alt="under card"
+                              className="w-16 h-24 rounded shadow-lg"
+                            />
+                            <div className="text-white text-xs">Under</div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-white text-xs mt-1">
+                        {hit.player}
+                      </div>
                     </div>
-                    <div className="text-white text-xs mt-1">{hit.player}</div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           </div>
@@ -563,9 +980,11 @@ const App = () => {
         {/* Game Result */}
         {gameResult && (
           <div className="mt-4 bg-white rounded-lg p-6 text-center">
-            <h2 className="text-2xl font-bold text-green-800 mb-4">Game Winner!</h2>
+            <h2 className="text-2xl font-bold text-green-800 mb-4">
+              Game Winner!
+            </h2>
             <p className="text-xl">{gameResult.name} wins!</p>
-            { gameResult.hitCard && ( 
+            {gameResult.hitCard && (
               <div className="flex justify-center gap-4 mt-4">
                 <div className="text-center">
                   <img
