@@ -98,6 +98,10 @@ const App = () => {
         setPlayedCards(prev => [...prev, { player: data.playerName, card: 'folded' }]);
       });
 
+      newSocket.on('card-removed', (data) => {
+        if (data.yourCard) setMyCards(data.yourCard);
+      })
+
       newSocket.on('round-winner', (data) => {
         setMessage(`${data.winnerPlayer} wins the round!`);
         setPlayedCards([]);
@@ -216,13 +220,13 @@ const App = () => {
     }
   };
 
-  const playCard = (card) => {
+  const playCard = (card, index) => {
     if (socket && isMyTurn) {
       socket.emit('play-card', card);
     }
   };
 
-  const foldCard = (card) => {
+  const foldCard = (card, index) => {
     if (socket && isMyTurn) {
       socket.emit('fold-card', card);
     }
@@ -482,7 +486,7 @@ const App = () => {
                     className="w-20 h-28 rounded shadow-lg cursor-pointer hover:scale-105 transition-transform"
                     onClick={() => {
                       if (gamePhase === 'playing' && isMyTurn) {
-                        playCard(card);
+                        playCard(card, index);
                       } else if (gamePhase === 'hitting') {
                         hitCard(card);
                       }
@@ -492,13 +496,13 @@ const App = () => {
                     <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <div className="flex gap-1">
                         <button
-                          onClick={() => playCard(card)}
+                          onClick={() => playCard(card, index)}
                           className="bg-green-600 text-white px-2 py-1 text-xs rounded"
                         >
                           Play
                         </button>
                         <button
-                          onClick={() => foldCard(card)}
+                          onClick={() => foldCard(card, index)}
                           className="bg-red-600 text-white px-2 py-1 text-xs rounded"
                         >
                           Fold
@@ -561,24 +565,26 @@ const App = () => {
           <div className="mt-4 bg-white rounded-lg p-6 text-center">
             <h2 className="text-2xl font-bold text-green-800 mb-4">Game Winner!</h2>
             <p className="text-xl">{gameResult.name} wins!</p>
-            <div className="flex justify-center gap-4 mt-4">
-              <div className="text-center">
-                <img
-                  src={getCardImage(gameResult.hitCard)}
-                  alt="winning hit card"
-                  className="w-20 h-28 rounded shadow-lg mx-auto"
-                />
-                <p className="text-sm mt-1">Hit Card</p>
+            { gameResult.hitCard && ( 
+              <div className="flex justify-center gap-4 mt-4">
+                <div className="text-center">
+                  <img
+                    src={getCardImage(gameResult.hitCard)}
+                    alt="winning hit card"
+                    className="w-20 h-28 rounded shadow-lg mx-auto"
+                  />
+                  <p className="text-sm mt-1">Hit Card</p>
+                </div>
+                <div className="text-center">
+                  <img
+                    src={getCardImage(gameResult.revealedCard)}
+                    alt="winning revealed card"
+                    className="w-20 h-28 rounded shadow-lg mx-auto"
+                  />
+                  <p className="text-sm mt-1">Under Card</p>
+                </div>
               </div>
-              <div className="text-center">
-                <img
-                  src={getCardImage(gameResult.revealedCard)}
-                  alt="winning revealed card"
-                  className="w-20 h-28 rounded shadow-lg mx-auto"
-                />
-                <p className="text-sm mt-1">Under Card</p>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>

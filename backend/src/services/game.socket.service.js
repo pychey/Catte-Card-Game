@@ -59,17 +59,20 @@ export const handleCardPlay = (socket, room, currentTurnIndex, playerCard) => {
     return { success: true };
 }
 
-export const removeCardFromPlayer = (player, card) => {
+export const removeCardFromPlayer = (socket, player, card) => {
     player.cards = player.cards.filter(c => !(c.value === card.value && c.suit === card.suit));
+    socket.emit('card-removed', { yourCard: player.cards });
 };
 
-export const handleRoundCompletion = (room, io) => {
+export const handleRoundCompletion = (socket, room, io) => {
     const winnerPlayer = room.players[room.cardWinner.playerIndex];
     io.to(room.id).emit('round-winner', { winnerPlayer: winnerPlayer.name, winningCard: room.cardWinner.card });
     winnerPlayer.hasTong = true;
     room.roundNumber += 1;
 
     if (room.roundNumber === 5) {
+        const isRevealStage = checkPlayerTong(room, winnerPlayer);
+        if (!isRevealStage) return handleShowResultNoRevealStage(socket, io, room, winnerPlayer);
         room.firstPlayerToHitIndex = room.cardWinner.playerIndex;
         room.cardWinner = undefined;
         
@@ -94,13 +97,23 @@ export const handleRoundCompletion = (room, io) => {
     }, 1000);
 };
 
+export const checkPlayerTong = (room, winnerPlayer) => {
+    let isRevealStage = false;
+    for (const player of room.players) {
+        if (player.socketId !== winnerPlayer.socketId  && player.hasTong) {
+            isRevealStage = true;
+        }
+    }
+    return isRevealStage;
+}
+
 export const handleCardHit = (socket, io, room, playerCard) => {
     if (!room.hasHitCard) {
         const firstPlayerToHitIndex = room.firstPlayerToHitIndex;
         const firstPlayerToHit = room.players[firstPlayerToHitIndex];
         if(socket.id !== firstPlayerToHit.socketId) return socket.emit('not-your-turn', { message: `Wait for ${firstPlayerToHit.name} to hit` });
 
-        removeCardFromPlayer(firstPlayerToHit, playerCard);
+        removeCardFromPlayer(socket, firstPlayerToHit, playerCard);
 
         room.hasHitCard = true;
         room.winningHitCard = playerCard;
@@ -121,7 +134,7 @@ export const handleCardHit = (socket, io, room, playerCard) => {
 
         if (hittingPlayer.hasHitCard) return socket.emit('not-your-turn', { message: 'You already hit your card'});
 
-        removeCardFromPlayer(hittingPlayer, playerCard);
+        removeCardFromPlayer(socket, hittingPlayer, playerCard);
         hittingPlayer.hasHitCard = true;
         hittingPlayer.hitCard = playerCard;
         hittingPlayer.underCard = hittingPlayer.cards[0];
@@ -145,7 +158,7 @@ export const handleCardThrow = (socket, io, room, playerCard) => {
     const isWin = isCardHigher(playerCard, room.winningHitCard);
     if (!isWin) return socket.emit('card-error', { message: 'Card is not higher' });
 
-    removeCardFromPlayer(throwingPlayer, playerCard);
+    removeCardFromPlayer(socket, throwingPlayer, playerCard);
 
     room.winningHitCard = playerCard;
     room.winningHitCardPlayer = throwingPlayer;
@@ -160,6 +173,19 @@ export const handleCardThrow = (socket, io, room, playerCard) => {
     } else {
         io.to(socket.data.roomId).emit('card-throw', { playerName: throwingPlayer.name, playerCard: { cardHit: playerCard, cardUnder: 'Unrevealed'}, remainingPlayers });
     }
+}
+
+export const handleShowResultNoRevealStage = (socket, io, room, gameWinner) => {
+    setTimeout(async () => {
+        io.to(socket.data.roomId).emit('game-result', {
+            gameWinner: {
+                name: gameWinner.name
+            }
+        });
+        await saveGameHistory(room, gameWinner);
+    }, 2000);
+
+    room.lastWinnerIndex = room.players.findIndex(p => p.socketId === gameWinner.socketId);
 }
 
 export const handleShowResult = (socket, io, room) => {
