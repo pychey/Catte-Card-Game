@@ -29,8 +29,16 @@ export const joinRoom = (socket, io, rooms, roomId) => {
 
 export const leaveRoom = (socket, io, rooms) => {
     const roomId = socket.data.roomId;
+    
+    if (!roomId) {
+        return socket.emit('room-error', 'You are not in a room');
+    }
 
     const room = rooms.get(roomId);
+    if (!room) {
+        return socket.emit('room-error', 'Room not found');
+    }
+
     socket.to(roomId).emit('player-left', { playerId: socket.data.player.id });
     roomServices.handleRoomLeave(socket, roomId, room);
 

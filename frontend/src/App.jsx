@@ -45,6 +45,12 @@ const App = () => {
   const [selectedCard, setSelectedCard] = useState(null);
   const [selectedCardIndex, setSelectedCardIndex] = useState(null);
 
+  //convert guest to player
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [convertUsername, setConvertUsername] = useState('');
+  const [convertPassword, setConvertPassword] = useState('');
+  const [convertLoading, setConvertLoading] = useState(false);
+
   useEffect(() => {
     if (token && !socket) {
       const newSocket = io('http://localhost:5001', {
@@ -67,8 +73,16 @@ const App = () => {
       newSocket.on('room-success', (data) => {
         setRoomId(data.roomId);
         setMessage(data.message);
-        setCurrentRoute('/room');
-        newSocket.emit('get-room-info');
+        if (data.message.includes('Left room')) {
+          setCurrentRoute('/lobby');
+          restartGame();
+          setPlayers([]);
+          setRoom(null);
+        } else {
+          // Handle creating/joining room
+          setCurrentRoute('/room');
+          newSocket.emit('get-room-info');
+        }
       });
 
       newSocket.on('room-error', (error) => {
@@ -76,7 +90,6 @@ const App = () => {
       });
 
       newSocket.on('room-update', (data) => {
-        // Update room list or player count
         console.log('Room update:', data);
       });
 
@@ -85,11 +98,11 @@ const App = () => {
       });
 
       newSocket.on('player-joined', (data) => {
-        setPlayers(prev => [...prev, data.player]);
+        setPlayers((prev) => [...prev, data.player]);
       });
 
       newSocket.on('player-left', (data) => {
-        setPlayers(prev => prev.filter(p => p.playerId !== data.playerId));
+        setPlayers((prev) => prev.filter((p) => p.playerId !== data.playerId));
       });
 
       newSocket.on('game-reset', (data) => {
@@ -146,7 +159,7 @@ const App = () => {
 
       newSocket.on('round-winner', (data) => {
         setMessage(`${data.winnerPlayer} wins the round!`);
-        setRoundNumber(prev => prev + 1);
+        setRoundNumber((prev) => prev + 1);
       });
 
       newSocket.on('card-hit', (data) => {
@@ -313,6 +326,14 @@ const App = () => {
     }
   };
 
+  const leaveRoom = () => {
+    if (socket) {
+      socket.emit('leave-room');
+    } else {
+      setMessage('No connection to server');
+    }
+  };
+
   const selectCard = (card, index) => {
     if (selectedCardIndex === index) {
       setSelectedCard(null);
@@ -324,6 +345,7 @@ const App = () => {
   };
 
   const playCard = () => {
+    setMessage('');
     setMessage('')
     setTurnMessage('')
     if (socket && selectedCard) {
@@ -334,6 +356,7 @@ const App = () => {
   };
 
   const foldCard = () => {
+    setMessage('');
     setMessage('')
     setTurnMessage('')
     if (socket && selectedCard) {
@@ -344,6 +367,7 @@ const App = () => {
   };
 
   const hitCard = () => {
+    setMessage('');
     setMessage('')
     setTurnMessage('')
     if (socket && selectedCard) {
@@ -354,6 +378,7 @@ const App = () => {
   };
 
   const throwCard = () => {
+    setMessage('');
     setMessage('')
     setTurnMessage('')
     if (socket && selectedCard) {
@@ -369,6 +394,49 @@ const App = () => {
     }
   };
 
+  //convert guest account to player account
+  const handleConvertToPlayer = async () => {
+    if (!convertUsername.trim() || !convertPassword.trim()) {
+      setMessage('Please enter both username and password');
+      return;
+    }
+
+    setConvertLoading(true);
+    try {
+      const response = await fetch('http://localhost:5001/auth/convert', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          username: convertUsername.trim(),
+          password: convertPassword.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update player state with new info
+        setPlayer(data.data.player);
+        setToken(data.data.token);
+        localStorage.setItem('token', data.data.token);
+        setShowConvertModal(false);
+        setConvertUsername('');
+        setConvertPassword('');
+        setMessage('Account upgraded successfully!');
+        setTimeout(() => setMessage(''), 4000);
+      } else {
+        setMessage(data.message);
+      }
+    } catch (error) {
+      setMessage('Conversion failed');
+    } finally {
+      setConvertLoading(false);
+    }
+  };
+
   const fetchPlayerHistory = async () => {
     setLoadingHistory(true);
     try {
@@ -376,11 +444,16 @@ const App = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
+      
       if (response.ok) {
         setPlayerHistory(data.data);
+      } else {
+        console.error('History API Error:', data.message);
+        setMessage(data.message || 'Failed to load history');
       }
     } catch (error) {
       console.error('Error fetching history:', error);
+      setMessage('Failed to load history');
     } finally {
       setLoadingHistory(false);
     }
@@ -742,6 +815,14 @@ const App = () => {
                 </p>
               </div>
             </div>
+            {player?.isGuest && (
+              <button
+                onClick={() => setShowConvertModal(true)}
+                className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 mt-4"
+              >
+                Upgrade to Full Account
+              </button>
+            )}
             <button
               onClick={() => {
                 setShowHistory(true);
@@ -758,93 +839,211 @@ const App = () => {
       {/* History Modal */}
       {showHistory && (
         <div className="fixed inset-0 bg-black/50 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md h-[70vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-purple-800">
-  {!showHistory ? 'Profile Information' : 'Game History'}
-</h2>
+          <div className="bg-white rounded-lg p-6 max-w-lg h-[80vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-3xl font-bold text-blue-800">
+                Game History
+              </h2>
               <button
                 onClick={() => setShowHistory(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-6">
+              {loadingHistory ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <div className="text-lg text-gray-600">Loading history...</div>
+                </div>
+              ) : playerHistory ? (
+                <div className="space-y-6">
+                  {/* Statistics Section */}
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl border border-blue-100">
+                    <h3 className="font-bold text-xl mb-4 text-gray-800">
+                      Your Statistics
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-blue-100">
+                        <div className="text-3xl font-bold text-blue-600 mb-1">
+                          {playerHistory.totalGames || 0}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">Total Games</div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-green-100">
+                        <div className="text-3xl font-bold text-green-600 mb-1">
+                          {playerHistory.wins || 0}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">Wins</div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-red-100">
+                        <div className="text-3xl font-bold text-red-600 mb-1">
+                          {playerHistory.losses || 0}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">Losses</div>
+                      </div>
+                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-purple-100">
+                        <div className="text-3xl font-bold text-purple-600 mb-1">
+                          {playerHistory.winRate || '0%'}
+                        </div>
+                        <div className="text-sm text-gray-600 font-medium">Win Rate</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recent Games Section */}
+                  <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                    <h3 className="font-bold text-xl mb-4 text-gray-800">
+                      Recent Games
+                    </h3>
+                    {playerHistory.recentGames &&
+                    playerHistory.recentGames.length > 0 ? (
+                      <div className="space-y-3 max-h-60 overflow-y-auto">
+                        {playerHistory.recentGames.map((game, index) => (
+                          <div
+                            key={index}
+                            className={`bg-white p-4 rounded-lg shadow-sm border-l-4 transition-all hover:shadow-md ${
+                              game.result === 'win'
+                                ? 'border-green-400 hover:bg-green-50'
+                                : 'border-red-400 hover:bg-red-50'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center">
+                                <div className={`w-3 h-3 rounded-full mr-3 ${
+                                  game.result === 'win' ? 'bg-green-500' : 'bg-red-500'
+                                }`}></div>
+                                <div>
+                                  <span
+                                    className={`font-bold text-lg ${
+                                      game.result === 'win'
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                    }`}
+                                  >
+                                    {game.result === 'win' ? 'Victory' : 'Defeat'}
+                                  </span>
+                                  <div className="text-sm text-gray-500">
+                                    Game #{playerHistory.recentGames.length - index}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm text-gray-600 font-medium">
+                                  {game.date}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  {new Date(game.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <span className="text-gray-400 text-2xl font-bold">?</span>
+                        </div>
+                        <p className="text-gray-500 text-lg font-medium">No games played yet</p>
+                        <p className="text-gray-400 text-sm mt-2">Start playing to see your game history!</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Performance Insights */}
+                  {playerHistory.totalGames > 0 && (
+                    <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl border border-yellow-200">
+                      <h3 className="font-bold text-xl mb-3 text-gray-800">
+                        Performance Insights
+                      </h3>
+                      <div className="space-y-2">
+                        {parseFloat(playerHistory.winRate) >= 70 && (
+                          <p className="text-green-700 font-medium">Excellent! You're on fire with a {playerHistory.winRate} win rate!</p>
+                        )}
+                        {parseFloat(playerHistory.winRate) >= 50 && parseFloat(playerHistory.winRate) < 70 && (
+                          <p className="text-blue-700 font-medium">Good job! You're maintaining a solid {playerHistory.winRate} win rate!</p>
+                        )}
+                        {parseFloat(playerHistory.winRate) < 50 && playerHistory.totalGames >= 3 && (
+                          <p className="text-orange-700 font-medium">Keep practicing! Every game makes you better!</p>
+                        )}
+                        <p className="text-gray-600 text-sm">
+                          You've played {playerHistory.totalGames} game{playerHistory.totalGames !== 1 ? 's' : ''} total.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-gray-400 text-3xl font-bold">!</span>
+                  </div>
+                  <p className="text-gray-500 text-xl font-medium">No history available</p>
+                  <p className="text-gray-400 text-sm mt-2">Start playing to build your game history!</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Convert Modal */}
+      {showConvertModal && (
+        <div className="fixed inset-0 bg-black/50 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-purple-800">
+                Upgrade Account
+              </h2>
+              <button
+                onClick={() => {
+                  setShowConvertModal(false);
+                  setConvertUsername('');
+                  setConvertPassword('');
+                  setMessage('');
+                }}
                 className="text-gray-500 hover:text-gray-700 text-xl font-bold"
               >
                 ×
               </button>
             </div>
             <div className="space-y-4">
-              {loadingHistory ? (
-                <div className="text-center py-8">
-                  <div className="text-lg">Loading history...</div>
-                </div>
-              ) : playerHistory ? (
-                <div className="space-y-4">
-                  <div className="bg-purple-50 p-4 rounded">
-                    <h3 className="font-semibold mb-2">Statistics</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {playerHistory.totalGames || 0}
-                        </div>
-                        <div className="text-xs text-gray-600">Total Games</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
-                          {playerHistory.wins || 0}
-                        </div>
-                        <div className="text-xs text-gray-600">Wins</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-600">
-                          {playerHistory.winRate || 0}
-                        </div>
-                        <div className="text-xs text-gray-600">Win Rate</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-orange-600">
-                          {playerHistory.rank || 0}
-                        </div>
-                        <div className="text-xs text-gray-600">Rank</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 p-4 rounded">
-                    <h3 className="font-semibold mb-2">Recent Games</h3>
-                    {playerHistory.recentGames &&
-                    playerHistory.recentGames.length > 0 ? (
-                      <div className="space-y-2">
-                        {playerHistory.recentGames.map((game, index) => (
-                          <div
-                            key={index}
-                            className="bg-white p-2 rounded border-l-4 border-gray-300"
-                          >
-                            <div className="text-sm">
-                              <span
-                                className={
-                                  game.result === 'win'
-                                    ? 'text-green-600'
-                                    : 'text-red-600'
-                                }
-                              >
-                                {game.result === 'win' ? 'Won' : 'Lost'}
-                              </span>
-                              <span className="text-gray-500 ml-2">
-                                {game.date}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-sm">
-                        No games played yet
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="text-4xl mb-2">📊</div>
-                  <p className="text-gray-500">No history available</p>
+              <p className="text-gray-600">
+                Convert your guest account to a full account to save your
+                progress and access more features.
+              </p>
+              <input
+                type="text"
+                placeholder="Choose Username"
+                value={convertUsername}
+                onChange={(e) => setConvertUsername(e.target.value)}
+                className="w-full p-3 border rounded"
+              />
+              <input
+                type="password"
+                placeholder="Choose Password"
+                value={convertPassword}
+                onChange={(e) => setConvertPassword(e.target.value)}
+                className="w-full p-3 border rounded"
+              />
+              <button
+                onClick={handleConvertToPlayer}
+                disabled={convertLoading}
+                className="w-full bg-purple-600 text-white py-3 rounded hover:bg-purple-700 disabled:opacity-50"
+              >
+                {convertLoading ? 'Upgrading...' : 'Upgrade Account'}
+              </button>
+              {message && (
+                <div
+                  className={`p-3 rounded text-center ${
+                    message.includes('error') || message.includes('failed')
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-green-100 text-green-700'
+                  }`}
+                >
+                  {message}
                 </div>
               )}
             </div>
@@ -860,9 +1059,19 @@ const App = () => {
         {/* Game Header */}
         <div className="bg-white rounded-lg p-4 mb-4">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">Catte Card Game - {roomId}</h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-bold">Catte Card Game - {roomId}</h1>
+              <button
+                onClick={leaveRoom}
+                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
+              >
+                Leave Room
+              </button>
+            </div>
             <div className="flex gap-4 justify-between items-center">
-              {roundNumber == 0 && (<span className="text-sm">Round: {roundNumber}</span>)}
+              {roundNumber == 0 && (
+                <span className="text-sm">Round: {roundNumber}</span>
+              )}
               <span className="text-sm">Phase: {gamePhase}</span>
               {!gameStarted && (
                 <button
@@ -881,34 +1090,36 @@ const App = () => {
           {/* Center area - played cards or hit cards */}
           <div className="absolute inset-0 flex items-center justify-center">
             {/* Other Players - positioned around the center */}
-            {players.filter(p => p.name !== player?.username).map((roomPlayer, index) => {
-              const positions = [
-                'absolute top-8 left-1/2 transform -translate-x-1/2', // top
-                'absolute top-1/2 right-8 transform -translate-y-1/2', // right
-                'absolute top-1/2 left-8 transform -translate-y-1/2', // left
-              ];
-              
-              const isPlayerTurn = turnMessage.includes(roomPlayer.name);
-              
-              return (
-                <div key={index} className={positions[index % 3]}>
-                  <div className="text-white text-center font-bold">
-                    {roomPlayer.name} {isPlayerTurn ? '(Turn)' : ''}
+            {players
+              .filter((p) => p.name !== player?.username)
+              .map((roomPlayer, index) => {
+                const positions = [
+                  'absolute top-8 left-1/2 transform -translate-x-1/2', // top
+                  'absolute top-1/2 right-8 transform -translate-y-1/2', // right
+                  'absolute top-1/2 left-8 transform -translate-y-1/2', // left
+                ];
+
+                const isPlayerTurn = turnMessage.includes(roomPlayer.name);
+
+                return (
+                  <div key={index} className={positions[index % 3]}>
+                    <div className="text-white text-center font-bold">
+                      {roomPlayer.name} {isPlayerTurn ? '(Turn)' : ''}
+                    </div>
+                    {/* Show back of cards for other players */}
+                    <div className="flex gap-1 justify-center mt-1">
+                      {[...Array(gameStarted ? 6 : 0)].map((_, cardIndex) => (
+                        <img
+                          key={cardIndex}
+                          src="/assets/BACK.png"
+                          alt="card back"
+                          className="w-8 h-12 rounded shadow-lg"
+                        />
+                      ))}
+                    </div>
                   </div>
-                  {/* Show back of cards for other players */}
-                  <div className="flex gap-1 justify-center mt-1">
-                    {[...Array(gameStarted ? 6 : 0)].map((_, cardIndex) => (
-                      <img
-                        key={cardIndex}
-                        src="/assets/BACK.png"
-                        alt="card back"
-                        className="w-8 h-12 rounded shadow-lg"
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
 
             <div className="bg-green-700 rounded-lg p-3 min-w-48 min-h-24 mb-20">
               {gamePhase === 'Playing' && playedCards.length > 0 && (
@@ -1008,7 +1219,9 @@ const App = () => {
                       src={getCardImage(card)}
                       alt={`${card.suit} ${card.value}`}
                       className={`w-16 h-22 rounded shadow-lg cursor-pointer hover:scale-105 hover:-translate-y-2 transition-all duration-200 ${
-                        selectedCardIndex === index ? 'ring-4 ring-gray-400 scale-105 -translate-y-1' : ''
+                        selectedCardIndex === index
+                          ? 'ring-4 ring-gray-400 scale-105 -translate-y-1'
+                          : ''
                       }`}
                       onClick={() => selectCard(card, index)}
                     />
@@ -1070,6 +1283,7 @@ const App = () => {
             </button>
           </div>
         )}
+        {/* Game Result */}
 
         {/* Game Result Popup */}
         {gameResult && (
