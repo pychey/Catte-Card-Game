@@ -26,3 +26,25 @@ export const handleRoomDeletion = (io, rooms, roomId, room) => {
         console.log(`Room '${room.name}' deleted as it is empty.`);
     }
 };
+
+export const resetGameState = (room) => {
+    room.roundNumber = 1;
+    room.firstPlayerIndex = 0;
+    room.currentTurnIndex = 0;
+    room.cardWinner = undefined;
+    room.firstPlayerToHitIndex = undefined;
+    room.winningHitCard = undefined;
+    room.winningHitCardPlayer = undefined;
+    room.hasHitCard = false;
+    room.hasFinishedHit = false;
+    room.deck = undefined;
+    room.lastWinnerIndex = undefined;
+
+    room.players.forEach(player => {
+        player.cards = [];
+        player.hasTong = false;
+        player.hasHitCard = false;
+        player.hitCard = undefined;
+        player.underCard = undefined;
+    });
+}

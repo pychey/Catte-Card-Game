@@ -27,11 +27,13 @@ const App = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [turnMessage, setTurnMessage] = useState('');
-  const [roundNumber, setRoundNumber] = useState(1);
+  const [roundNumber, setRoundNumber] = useState(undefined);
   const [playedCards, setPlayedCards] = useState([]);
-  const [gamePhase, setGamePhase] = useState('waiting'); // waiting, playing, hitting, revealing, finished
+  const [gamePhase, setGamePhase] = useState('Waiting'); // Waiting, Playing, Hitting, Revealing, Finished
   const [hitCards, setHitCards] = useState([]);
   const [gameResult, setGameResult] = useState(null);
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [selectedCardIndex, setSelectedCardIndex] = useState(null);
 
   useEffect(() => {
     if (token && !socket) {
@@ -55,6 +57,7 @@ const App = () => {
       newSocket.on('room-success', (data) => {
         setMessage(data.message);
         setCurrentRoute('/room');
+        newSocket.emit('get-room-info');
       });
 
       newSocket.on('room-error', (error) => {
@@ -66,11 +69,28 @@ const App = () => {
         console.log('Room update:', data);
       });
 
+      newSocket.on('room-players', (data) => {
+        setPlayers(data.players);
+      });
+
+      newSocket.on('player-joined', (data) => {
+        setPlayers(prev => [...prev, data.player]);
+      });
+
+      newSocket.on('player-left', (data) => {
+        setPlayers(prev => prev.filter(p => p.playerId !== data.playerId));
+      });
+
+      newSocket.on('game-reset', (data) => {
+        restartGame();
+        setMessage(data.message);
+      });
+
       // Game events
       newSocket.on('game-started', (data) => {
         setGameStarted(true);
         setMyCards(data.yourCard);
-        setGamePhase('playing');
+        setGamePhase('Playing');
         setRoundNumber(1);
       });
 
@@ -78,7 +98,7 @@ const App = () => {
         console.log('your-turn', data);
         setIsMyTurn(true);
         setTurnMessage(data.message);
-        if (data.message.includes('Hit')) setGamePhase('hitting');
+        if (data.message.includes('Hit')) setGamePhase('Hitting');
         if (data.yourCard) setMyCards(data.yourCard);
       });
 
@@ -86,7 +106,7 @@ const App = () => {
         console.log('not-your-turn', data);
         setIsMyTurn(false);
         setTurnMessage(data.message);
-        if (data.message.includes('hit')) setGamePhase('hitting');
+        if (data.message.includes('hit')) setGamePhase('Hitting');
         if (data.yourCard) setMyCards(data.yourCard);
       });
 
@@ -104,8 +124,8 @@ const App = () => {
 
       newSocket.on('round-winner', (data) => {
         setMessage(`${data.winnerPlayer} wins the round!`);
-        setPlayedCards([]);
-        setTimeout(() => setMessage(''), 2000);
+        setRoundNumber(prev => prev + 1);
+        setTimeout(() => setMessage(''), 5000);
       });
 
       newSocket.on('card-hit', (data) => {
@@ -124,11 +144,12 @@ const App = () => {
 
       newSocket.on('all-hit', (data) => {
         setMessage(data.message);
-        setGamePhase('revealing');
+        setGamePhase('Revealing');
+        setTimeout(() => setMessage(''), 4000);
       });
 
       newSocket.on('reveal-card', (data) => {
-        setGamePhase('revealing');
+        setGamePhase('Revealing');
         setMessage(data.message);
         // Update hit cards with revealed information
         const allRevealed = [data.winningHitCardPlayer, ...data.otherTongPlayer];
@@ -141,8 +162,9 @@ const App = () => {
 
       newSocket.on('game-result', (data) => {
         setGameResult(data.gameWinner);
-        setGamePhase('finished');
+        setGamePhase('Finished');
         setMessage(`${data.gameWinner.name} wins the game!`);
+        setTimeout(() => setMessage(''), 5000);
       });
 
       newSocket.on('game-error', (error) => {
@@ -192,6 +214,7 @@ const App = () => {
         localStorage.setItem('token', data.data.token);
         setPlayer(data.data.player);
         setMessage('Authentication successful!');
+        setTimeout(() => setMessage(''), 4000);
       } else {
         setMessage(data.message);
       }
@@ -220,27 +243,49 @@ const App = () => {
     }
   };
 
-  const playCard = (card, index) => {
-    if (socket && isMyTurn) {
-      socket.emit('play-card', card);
+  const selectCard = (card, index) => {
+    if (selectedCardIndex === index) {
+      setSelectedCard(null);
+      setSelectedCardIndex(null);
+    } else {
+      setSelectedCard(card);
+      setSelectedCardIndex(index);
     }
   };
 
-  const foldCard = (card, index) => {
-    if (socket && isMyTurn) {
-      socket.emit('fold-card', card);
+  const playCard = () => {
+    setMessage('')
+    if (socket && selectedCard) {
+      socket.emit('play-card', selectedCard);
+      setSelectedCard(null);
+      setSelectedCardIndex(null);
     }
   };
 
-  const hitCard = (card) => {
-    if (socket) {
-      socket.emit('hit-card', card);
+  const foldCard = () => {
+    setMessage('')
+    if (socket && selectedCard) {
+      socket.emit('fold-card', selectedCard);
+      setSelectedCard(null);
+      setSelectedCardIndex(null);
     }
   };
 
-  const throwCard = (card) => {
-    if (socket) {
-      socket.emit('throw-card', card);
+  const hitCard = () => {
+    setMessage('')
+    if (socket && selectedCard) {
+      socket.emit('hit-card', selectedCard);
+      setSelectedCard(null);
+      setSelectedCardIndex(null);
+    }
+  };
+
+  const throwCard = () => {
+    setMessage('')
+    if (socket && selectedCard) {
+      socket.emit('throw-card', selectedCard);
+      setSelectedCard(null);
+      setSelectedCardIndex(null);
     }
   };
 
@@ -251,14 +296,18 @@ const App = () => {
   };
 
   const restartGame = () => {
+    setMessage('');
     setGameStarted(false);
-    setGamePhase('waiting');
+    setGamePhase('Waiting');
     setMyCards([]);
     setPlayedCards([]);
     setHitCards([]);
     setGameResult(null);
-    setRoundNumber(1);
-    setMessage('');
+    setRoundNumber(undefined);
+    setSelectedCard(null);
+    setSelectedCardIndex(null);
+    setIsMyTurn(false);
+    setTurnMessage('');
   };
 
   const getCardImage = (card) => {
@@ -389,8 +438,8 @@ const App = () => {
         <div className="bg-white rounded-lg p-4 mb-4">
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold">Catte Card Game</h1>
-            <div className="flex gap-4">
-              <span className="text-sm">Round: {roundNumber}</span>
+            <div className="flex gap-4 justify-between items-center">
+              {roundNumber == 0 && (<span className="text-sm">Round: {roundNumber}</span>)}
               <span className="text-sm">Phase: {gamePhase}</span>
               {!gameStarted && (
                 <button
@@ -400,7 +449,7 @@ const App = () => {
                   Start Game
                 </button>
               )}
-              {gamePhase === 'finished' && (
+              {gamePhase === 'Finished' && (
                 <button
                   onClick={restartGame}
                   className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
@@ -416,27 +465,57 @@ const App = () => {
         <div className="bg-green-600 rounded-lg p-8 mb-4 relative" style={{ minHeight: '600px' }}>
           {/* Center area - played cards or hit cards */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-green-700 rounded-lg p-4 min-w-64 min-h-32">
-              {gamePhase === 'playing' && playedCards.length > 0 && (
+            {/* Other Players - positioned around the center */}
+            {players.filter(p => p.name !== player?.username).map((roomPlayer, index) => {
+              const positions = [
+                'absolute top-8 left-1/2 transform -translate-x-1/2', // top
+                'absolute top-1/2 right-8 transform -translate-y-1/2', // right
+                'absolute top-1/2 left-8 transform -translate-y-1/2', // left
+              ];
+              
+              const isPlayerTurn = turnMessage.includes(roomPlayer.name);
+              
+              return (
+                <div key={index} className={positions[index % 3]}>
+                  <div className="text-white text-center font-bold">
+                    {roomPlayer.name} {isPlayerTurn ? '(Turn)' : ''}
+                  </div>
+                  {/* Show back of cards for other players */}
+                  <div className="flex gap-1 justify-center mt-1">
+                    {[...Array(gameStarted ? 6 : 0)].map((_, cardIndex) => (
+                      <img
+                        key={cardIndex}
+                        src="/assets/BACK.png"
+                        alt="card back"
+                        className="w-8 h-12 rounded shadow-lg"
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            <div className="bg-green-700 rounded-lg p-4 min-w-64 min-h-32 mb-20">
+              {gamePhase === 'Playing' && playedCards.length > 0 && (
                 <div className="text-white text-center mb-2">Played Cards</div>
               )}
-              {gamePhase === 'hitting' || gamePhase === 'revealing' ? (
+              {gamePhase === 'Hitting' || gamePhase === 'Revealing' ? (
                 <div className="text-white text-center mb-2">Hit Cards</div>
               ) : null}
               
               <div className="flex flex-wrap gap-2 justify-center">
-                {gamePhase === 'playing' && playedCards.map((play, index) => (
+                {gamePhase === 'Playing' && playedCards.map((play, index) => (
                   <div key={index} className="text-center">
                     <img
                       src={getCardImage(play.card)}
                       alt="card"
                       className="w-16 h-24 rounded shadow-lg"
                     />
-                    <div className="text-white text-xs mt-1">{play.player}</div>
+                    <div className="text-white text-xs mt-1">{play.player.slice(0, 7)}</div>
                   </div>
                 ))}
                 
-                {(gamePhase === 'hitting' || gamePhase === 'revealing') && hitCards.map((hit, index) => (
+                {(gamePhase === 'Hitting' || gamePhase === 'Revealing') && hitCards.map((hit, index) => (
                   <div key={index} className="text-center">
                     <div className="flex gap-1">
                       <div>
@@ -447,7 +526,7 @@ const App = () => {
                         />
                         <div className="text-white text-xs">Hit</div>
                       </div>
-                      {gamePhase === 'revealing' && (
+                      {gamePhase === 'Revealing' && (
                         <div>
                           <img
                             src={getCardImage(hit.cardUnder)}
@@ -465,74 +544,79 @@ const App = () => {
             </div>
           </div>
 
-          {/* Players around table - simplified to show current player at bottom */}
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-            <div className="text-white text-center mb-2">
-              {player?.username} {isMyTurn ? '(Your Turn)' : ''}
-            </div>
-          </div>
-        </div>
-
-        {/* Player's Cards */}
-        {gameStarted && myCards.length > 0 && (
-          <div className="bg-white rounded-lg p-4">
-            <h3 className="text-lg font-bold mb-4">Your Cards</h3>
-            <div className="flex gap-2 flex-wrap justify-center">
-              {myCards.map((card, index) => (
-                <div key={index} className="relative group">
-                  <img
-                    src={getCardImage(card)}
-                    alt={`${card.suit} ${card.value}`}
-                    className="w-20 h-28 rounded shadow-lg cursor-pointer hover:scale-105 transition-transform"
-                    onClick={() => {
-                      if (gamePhase === 'playing' && isMyTurn) {
-                        playCard(card, index);
-                      } else if (gamePhase === 'hitting') {
-                        hitCard(card);
-                      }
-                    }}
-                  />
-                  {gamePhase === 'playing' && isMyTurn && (
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => playCard(card, index)}
-                          className="bg-green-600 text-white px-2 py-1 text-xs rounded"
-                        >
-                          Play
-                        </button>
-                        <button
-                          onClick={() => foldCard(card, index)}
-                          className="bg-red-600 text-white px-2 py-1 text-xs rounded"
-                        >
-                          Fold
-                        </button>
-                      </div>
-                    </div>
+          {/* Player's Cards - Bottom of Table */}
+          {gameStarted && myCards.length > 0 && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-full max-w-4xl">
+              {/* Action Buttons - shown when card is selected */}
+              {selectedCard && (
+                <div className="mb-10 flex justify-center gap-4">
+                  {gamePhase === 'Playing' && isMyTurn && (
+                    <>
+                      <button
+                        onClick={playCard}
+                        className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 shadow-lg"
+                      >
+                        Play Card
+                      </button>
+                      <button
+                        onClick={foldCard}
+                        className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 shadow-lg"
+                      >
+                        Fold Card
+                      </button>
+                    </>
                   )}
-                  {gamePhase === 'hitting' && (
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => hitCard(card)}
-                          className="bg-blue-600 text-white px-2 py-1 text-xs rounded"
-                        >
-                          Hit
-                        </button>
-                        <button
-                          onClick={() => throwCard(card)}
-                          className="bg-purple-600 text-white px-2 py-1 text-xs rounded"
-                        >
-                          Throw
-                        </button>
-                      </div>
-                    </div>
+                  {gamePhase === 'Hitting' && (
+                    <>
+                      <button
+                        onClick={hitCard}
+                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow-lg"
+                      >
+                        Hit Card
+                      </button>
+                      <button
+                        onClick={throwCard}
+                        className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 shadow-lg"
+                      >
+                        Throw Card
+                      </button>
+                    </>
                   )}
                 </div>
-              ))}
+              )}
+
+              {/* Player Name and Turn Indicator */}
+              <div className="text-white text-center font-bold mb-8">
+                {player?.username} {isMyTurn ? '(Your Turn)' : ''}
+              </div>
+
+              {/* Player's Cards */}
+              <div className="flex gap-4 justify-center mb-2">
+                {myCards.map((card, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={getCardImage(card)}
+                      alt={`${card.suit} ${card.value}`}
+                      className={`w-16 h-22 rounded shadow-lg cursor-pointer hover:scale-105 hover:-translate-y-2 transition-all duration-200 ${
+                        selectedCardIndex === index ? 'ring-4 ring-gray-400 scale-105 -translate-y-1' : ''
+                      }`}
+                      onClick={() => selectCard(card, index)}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Player name when no cards (before game starts) */}
+          {!gameStarted && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+              <div className="text-white text-center font-bold">
+                {player?.username}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Game Messages */}
         {message && (
@@ -549,7 +633,7 @@ const App = () => {
         )}
 
         {/* Show Result Button */}
-        {gamePhase === 'revealing' && (
+        {gamePhase === 'Revealing' && (
           <div className="mt-4 flex justify-center">
             <button
               onClick={showResult}

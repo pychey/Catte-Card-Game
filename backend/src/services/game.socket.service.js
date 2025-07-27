@@ -66,7 +66,7 @@ export const removeCardFromPlayer = (socket, player, card) => {
 
 export const handleRoundCompletion = (socket, room, io) => {
     const winnerPlayer = room.players[room.cardWinner.playerIndex];
-    io.to(room.id).emit('round-winner', { winnerPlayer: winnerPlayer.name, winningCard: room.cardWinner.card });
+    io.to(socket.data.roomId).emit('round-winner', { winnerPlayer: winnerPlayer.name, winningCard: room.cardWinner.card });
     winnerPlayer.hasTong = true;
     room.roundNumber += 1;
 

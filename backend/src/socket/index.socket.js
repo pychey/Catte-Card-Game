@@ -1,7 +1,7 @@
 import { io } from "../utils/socket.utils.js";
 import handleRoomEvents from "../routes/room.socket.route.js";
 import handleGameEvents from "../routes/game.socket.route.js";
-import { handleRoomDeletion } from "../services/room.socket.service.js";
+import { handleRoomDeletion, resetGameState } from "../services/room.socket.service.js";
 import { authenticateSocket } from "../middleware/auth.socket.middleware.js";
 
 const connectedUsers = new Set();
@@ -34,7 +34,14 @@ io.on('connection', (socket) => {
 
         if (disconnectedRoomId) {
             const room = rooms.get(disconnectedRoomId);
+            socket.to(disconnectedRoomId).emit('player-left', { playerId: socket.data.player.id });
             room.players = room.players.filter( p => p.socketId !== socket.id);
+
+            if (room.players.length > 0) {
+                resetGameState(room);
+                io.to(disconnectedRoomId).emit('game-reset', { message: 'A Player Disconnected' });
+            }
+
             io.emit('room-update', { roomId: disconnectedRoomId, playerCount: room.players.length});
 
             console.log(`${socket.id} disconnect from room '${room.name}'`);
