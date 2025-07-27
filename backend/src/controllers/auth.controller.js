@@ -88,3 +88,12 @@ export const convertGuestToPlayer = async (req, res) => {
 export const verifyToken = async (req, res) => {
     res.status(200).json({  data: { valid: true, player: { id: req.player.id, username: req.player.username, rank: req.player.rank, isGuest: req.player.isGuest }}});
 };
+
+export const getPlayerHistory = async (req, res) => {
+    try {
+        const playerHistory = await authService.getPlayerHistory(req.player.id);
+        res.status(200).json({ data: playerHistory });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};

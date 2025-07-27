@@ -1,5 +1,27 @@
 import bcrypt from 'bcrypt';
 import Player from "../models/player.model.js";
+import History from "../models/history.model.js";
+
+export const getPlayerHistory = async (playerId) => {
+    const histories = await History.findAll({
+        include: [{
+            model: Player,
+            where: { id: playerId },
+            through: { attributes: [] }
+        }]
+    });
+    
+    const totalGames = histories.length;
+    const wins = histories.filter(h => h.result === 'Won').length;
+    const winRate = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(1) : 0;
+    
+    return {
+        totalGames,
+        wins,
+        losses: totalGames - wins,
+        winRate: `${winRate}%`
+    };
+};
 
 export const createPlayer = async (username, password) => {
     if ( password.length < 6 ) throw new Error('Password must be at least 6 character');
