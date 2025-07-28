@@ -19,7 +19,7 @@ export const getPlayerHistory = async (playerId) => {
     
     // Format recent games for frontend
     const recentGames = histories.slice(0, 10).map(history => ({
-        result: history.result === 'Won' ? 'win' : 'lost', // Convert "Won" to "win", "Lost" to "lost"
+        result: history.result === 'Won' ? 'win' : 'lost',
         date: new Date(history.createdAt).toLocaleDateString()
     }));
     

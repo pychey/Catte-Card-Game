@@ -39,6 +39,7 @@ export const resetGameState = (room) => {
     room.hasFinishedHit = false;
     room.deck = undefined;
     room.lastWinnerIndex = undefined;
+    room.gameStarted = false;
 
     room.players.forEach(player => {
         player.cards = [];

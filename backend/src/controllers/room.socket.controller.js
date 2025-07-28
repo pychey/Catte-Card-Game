@@ -9,7 +9,7 @@ export const createRoom = (socket, io, rooms, roomName) => {
 
     socket.emit('room-success', {roomId, message: 'Room created successfully'});
     socket.emit('room-players', { players: rooms.get(roomId).players });
-    io.emit('room-update', {roomId, roomName, playerCount: 1});
+    io.emit('room-update', {roomId, roomName, playerCount: 1, isGamePlaying: false});
     console.log('Room created', roomId);
 }
 
@@ -18,12 +18,14 @@ export const joinRoom = (socket, io, rooms, roomId) => {
     if (!rooms.has(roomId)) return socket.emit('room-error','Room not found');
 
     const room = rooms.get(roomId);
+    if (room.players.length >= 4) return socket.emit('room-error','Room is full');
+    if (room.gameStarted) return socket.emit('room-error','Cannot join - game is in progress');
     roomServices.handleRoomJoin(socket, roomId, room);
 
     socket.emit('room-success', {roomId, message: 'Join room successfully'});
     socket.emit('room-players', { players: room.players });
     socket.to(roomId).emit('player-joined', { player: { playerId: socket.data.player.id, name: socket.data.playerName } });
-    io.emit('room-update', {roomId, playerCount: room.players.length});
+    io.emit('room-update', {roomId, playerCount: room.players.length, isGamePlaying: room.gameStarted || false});
     console.log('Room joined', roomId);
 }
 
@@ -48,7 +50,7 @@ export const leaveRoom = (socket, io, rooms) => {
     }
 
     socket.emit('room-success', {roomId, message: 'Left room successfully'});
-    io.emit('room-update', {roomId, playerCount: room.players.length});
+    io.emit('room-update', {roomId, playerCount: room.players.length, isGamePlaying: room.gameStarted || false});
     console.log(`${socket.id} left room '${room.name}'`);
 
     roomServices.handleRoomDeletion(io, rooms, roomId, room);
@@ -59,4 +61,15 @@ export const getRoomInfo = (socket, rooms) => {
     
     const room = rooms.get(roomId);
     socket.emit('room-players', { players: room.players });
+}
+
+export const getActiveRooms = (socket, rooms) => {
+    const roomsList = Array.from(rooms.entries()).map(([roomId, room]) => ({
+        roomId,
+        roomName: room.name,
+        playerCount: room.players.length,
+        isGamePlaying: room.gameStarted || false
+    }));
+    
+    socket.emit('active-rooms', { rooms: roomsList });
 }

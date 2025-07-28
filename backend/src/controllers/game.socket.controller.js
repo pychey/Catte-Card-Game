@@ -9,12 +9,14 @@ export const startGame = (socket, io, rooms) => {
     if (!room.deck) room.deck = gameServices.buildDeck();
     gameServices.shuffleDeck(room.deck);
     gameServices.startGame(room);
+    room.gameStarted = true;
 
     room.players.forEach(player => io.to(player.socketId).emit('game-started', { yourCard: player.cards }));
 
     gameServices.setDefaultRoom(room);
     const firstPlayer = room.players[room.firstPlayerIndex];
     gameServices.notifyPlayerTurns(room, io, firstPlayer);
+    io.emit('room-update', {roomId, playerCount: room.players.length, isGamePlaying: true});
 }
 
 export const playCard = (socket, io, rooms, playerCard) => {
@@ -84,5 +86,7 @@ export const restartGameForAll = (socket, io, rooms) => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
     gameServices.setDefaultRoom(room);
+    room.gameStarted = false;
+    io.emit('room-update', {roomId, playerCount: room.players.length, isGamePlaying: false});
     io.to(roomId).emit('game-restarted');
 }

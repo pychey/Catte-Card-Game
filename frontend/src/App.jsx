@@ -34,12 +34,8 @@ const App = () => {
   const [gameResult, setGameResult] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
-  //Add state for profile
   const [showProfileModal, setShowProfileModal] = useState(false);
-
-  //Game history
-
-  const [showHistory, setShowHistory] = useState(false);
+  const [profileTab, setProfileTab] = useState('profile');
   const [playerHistory, setPlayerHistory] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedCard, setSelectedCard] = useState(null);
@@ -61,6 +57,9 @@ const App = () => {
         setIsAuthenticated(true);
         setPlayer(data.player);
         setCurrentRoute('/lobby');
+        setTimeout(() => {
+          newSocket.emit('get-active-rooms');
+        }, 100);
       });
 
       newSocket.on('connect_error', () => {
@@ -78,8 +77,12 @@ const App = () => {
           restartGame();
           setPlayers([]);
           setRoom(null);
+          setRoomName(null);
+          setRoomId(null);
+          setTimeout(() => {
+            newSocket.emit('get-active-rooms');
+          }, 100);
         } else {
-          // Handle creating/joining room
           setCurrentRoute('/room');
           newSocket.emit('get-room-info');
         }
@@ -158,7 +161,6 @@ const App = () => {
       });
 
       newSocket.on('round-winner', (data) => {
-        setMessage(`${data.winnerPlayer} wins the round!`);
         setRoundNumber((prev) => prev + 1);
       });
 
@@ -235,6 +237,10 @@ const App = () => {
         }
       });
 
+      newSocket.on('active-rooms', (data) => {
+        setRooms(data.rooms);
+      });
+
       newSocket.on('game-result', (data) => {
         setGameResult(data.gameWinner);
         setGamePhase('Finished');
@@ -266,6 +272,14 @@ const App = () => {
       return () => clearTimeout(timer);
     }
   }, [message]);
+
+  useEffect(() => {
+    if (currentRoute === '/lobby' && socket) {
+      setTimeout(() => {
+        socket.emit('get-active-rooms');
+      }, 100);
+    }
+  }, [currentRoute, socket]);
 
   const handleAuth = async (mode) => {
     setLoading(true);
@@ -473,6 +487,34 @@ const App = () => {
     setTurnMessage('');
   };
 
+  const handleLogout = () => {
+    // Close socket first
+    if (socket) {
+      socket.close();
+      setSocket(null);
+    }
+
+    // Clear all states
+    setToken(null);
+    setPlayer(null);
+    setIsAuthenticated(false);
+    setCurrentRoute('/auth');
+    setUsername(null);
+    setPassword(null);
+
+    // Reset profile modal states
+    setShowProfileModal(false);
+    setProfileTab('profile');
+    setPlayerHistory(null);
+
+    // Reset other states
+    setMessage('');
+    setRooms([]); // Clear rooms list
+
+    // Clear localStorage
+    localStorage.removeItem('token');
+  };
+
   const getCardImage = (card) => {
     if (!card || card === 'folded' || card === 'Unrevealed') return '/assets/BACK.png';
     return `/assets/${card.suit}_${card.value}.png`;
@@ -567,7 +609,13 @@ const App = () => {
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-lg cursor-pointer hover:bg-green-700 transition-colors"
-              onClick={() => setShowProfileModal(true)}
+              onClick={() => {
+                setShowProfileModal(true)
+                setProfileTab('profile');
+                if (!playerHistory) {
+                  fetchPlayerHistory();
+                }
+              }}
             >
               {player?.username?.charAt(0).toUpperCase()}
             </div>
@@ -578,31 +626,7 @@ const App = () => {
 
           {/* Make  when log out can log in again */}
           <button
-            onClick={() => {
-              // Close socket first
-              if (socket) {
-                socket.close();
-                setSocket(null);
-              }
-
-              // Clear all states
-              setToken(null);
-              setPlayer(null);
-              setIsAuthenticated(false);
-              setCurrentRoute('/auth');
-
-              // Reset profile modal states
-              setShowProfileModal(false);
-              setShowHistory(false);
-              setPlayerHistory(null);
-
-              // Reset other states
-              setMessage('');
-              setRooms([]);
-
-              // Clear localStorage
-              localStorage.removeItem('token');
-            }}
+            onClick={handleLogout}
             className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors"
           >
             Logout
@@ -673,32 +697,70 @@ const App = () => {
         {/* Active Rooms List */}
         {rooms.length >= 0 && (
           <div className="mt-6 bg-white rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4">Availible Rooms</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Available Rooms</h2>
+              <button
+                onClick={() => {
+                  if (socket) {
+                    socket.emit('get-active-rooms');
+                  }
+                }}
+                className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+            </div>
             <div className="space-y-2">
               {rooms.length === 0 && (
                 <p className="text-gray-500">No active rooms available</p>
               )}
-              {rooms.map((room) => (
-                <div
-                  key={room.roomId}
-                  className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
-                >
-                  <div>
-                    <span className="font-medium">{room.roomName}</span>
+              {rooms.map((room) => {
+                const isFull = room.playerCount >= 4;
+                const isPlaying = room.isGamePlaying;
+                const canJoin = !isFull && !isPlaying;
+                
+                let buttonText = 'Join';
+                let buttonClass = 'bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700';
+                
+                if (isFull) {
+                  buttonText = 'Full';
+                  buttonClass = 'bg-gray-400 text-white px-3 py-1 rounded text-sm cursor-not-allowed';
+                } else if (isPlaying) {
+                  buttonText = 'Playing';
+                  buttonClass = 'bg-yellow-500 text-white px-3 py-1 rounded text-sm cursor-not-allowed';
+                }
+
+                return (
+                  <div
+                    key={room.roomId}
+                    className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
+                  >
+                    <div>
+                      <span className="font-medium">{room.roomName}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-gray-600">
+                        {room.playerCount}/4 Players
+                      </span>
+                      {isPlaying && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                          In Game
+                        </span>
+                      )}
+                      <button
+                        onClick={() => canJoin && socket.emit('join-room', room.roomId)}
+                        disabled={!canJoin}
+                        className={buttonClass}
+                      >
+                        {buttonText}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600">
-                      {room.playerCount}/4 Players
-                    </span>
-                    <button
-                      onClick={() => socket.emit('join-room', room.roomId)}
-                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                    >
-                      Join
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -764,231 +826,222 @@ const App = () => {
           </div>
         </div>
       )}
-      {/* Profile Modal */}
-      {/* Profile Modal */}
+
+      {/* Combined Profile & History Modal */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/50 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md h-[80vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold  text-green-800">
-                Profile Information
-              </h2>
-
-              <button
-                onClick={() => setShowProfileModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-xl font-bold"
-              >
-                ×
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-3">
-                  {player?.username?.charAt(0).toUpperCase()}
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">
-                  {player?.username}
-                </h3>
-                <p className="text-gray-600">
-                  {player?.isGuest ? 'Guest Player' : 'Registered Player'}
-                </p>
-              </div>
-
-              <div className="bg-gray-50 p-3 rounded flex justify-between items-center">
-                <label className="font-semibold text-gray-700">
-                  Player ID:
-                </label>
-                <p className="text-gray-600">{player?.id}</p>
-              </div>
-
-              <div className="bg-gray-50 p-3 rounded flex justify-between items-center">
-                <label className="font-semibold text-gray-700">Rank:</label>
-                <p className="text-gray-600">{player?.rank || 0}</p>
-              </div>
-
-              <div className="bg-gray-50 p-3 rounded flex justify-between items-center">
-                <label className="font-semibold text-gray-700">
-                  Account Type:
-                </label>
-                <p className="text-gray-600">
-                  {player?.isGuest ? 'Guest Account' : 'Registered Account'}
-                </p>
-              </div>
-            </div>
-            {player?.isGuest && (
-              <button
-                onClick={() => setShowConvertModal(true)}
-                className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 mt-4"
-              >
-                Upgrade to Full Account
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setShowHistory(true);
-                fetchPlayerHistory();
-              }}
-              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mt-4"
-            >
-              View Game History
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* History Modal */}
-      {showHistory && (
-        <div className="fixed inset-0 bg-black/50 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg h-[80vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 shadow-2xl">
+          <div className="bg-white rounded-lg p-6 w-full max-w-xl h-[80vh] overflow-y-auto absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 shadow-2xl mx-4">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-3xl font-bold text-blue-800">
-                Game History
+              <h2 className="text-3xl font-bold text-green-800">
+                Player Dashboard
               </h2>
               <button
-                onClick={() => setShowHistory(false)}
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setProfileTab('profile');
+                }}
                 className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
               >
                 ×
               </button>
             </div>
-            <div className="space-y-6">
-              {loadingHistory ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                  <div className="text-lg text-gray-600">Loading history...</div>
+
+            {/* Tab Navigation */}
+            <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => {
+                  setProfileTab('profile');
+                  if (!playerHistory) {
+                    fetchPlayerHistory();
+                  }
+                }}
+                className={`flex-1 py-3 px-4 rounded-md font-medium transition-all ${
+                  profileTab === 'profile'
+                    ? 'bg-green-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Profile Info
+              </button>
+              <button
+                onClick={() => {
+                  setProfileTab('history');
+                  if (profileTab !== 'history') {
+                    fetchPlayerHistory();
+                  }
+                }}
+                className={`flex-1 py-3 px-4 rounded-md font-medium transition-all ${
+                  profileTab === 'history'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Game History
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            {profileTab === 'profile' ? (
+              <div className="space-y-6">
+                <div className="text-center mb-8">
+                  <div className="w-24 h-24 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-4xl mx-auto mb-4">
+                    {player?.username?.charAt(0).toUpperCase()}
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                    {player?.username}
+                  </h3>
+                  <p className="text-gray-600 text-lg">
+                    {player?.isGuest ? 'Guest Player' : 'Registered Player'}
+                  </p>
                 </div>
-              ) : playerHistory ? (
-                <div className="space-y-6">
-                  {/* Statistics Section */}
-                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl border border-blue-100">
-                    <h3 className="font-bold text-xl mb-4 text-gray-800">
-                      Your Statistics
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-blue-100">
-                        <div className="text-3xl font-bold text-blue-600 mb-1">
-                          {playerHistory.totalGames || 0}
-                        </div>
-                        <div className="text-sm text-gray-600 font-medium">Total Games</div>
-                      </div>
-                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-green-100">
-                        <div className="text-3xl font-bold text-green-600 mb-1">
-                          {playerHistory.wins || 0}
-                        </div>
-                        <div className="text-sm text-gray-600 font-medium">Wins</div>
-                      </div>
-                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-red-100">
-                        <div className="text-3xl font-bold text-red-600 mb-1">
-                          {playerHistory.losses || 0}
-                        </div>
-                        <div className="text-sm text-gray-600 font-medium">Losses</div>
-                      </div>
-                      <div className="bg-white p-4 rounded-lg shadow-sm text-center border border-purple-100">
-                        <div className="text-3xl font-bold text-purple-600 mb-1">
-                          {playerHistory.winRate || '0%'}
-                        </div>
-                        <div className="text-sm text-gray-600 font-medium">Win Rate</div>
-                      </div>
-                    </div>
+
+                <div className="grid gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                    <label className="font-semibold text-gray-700 text-lg">
+                      Player ID:
+                    </label>
+                    <p className="text-gray-600 text-lg">{player?.id}</p>
                   </div>
 
-                  {/* Recent Games Section */}
-                  <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-                    <h3 className="font-bold text-xl mb-4 text-gray-800">
-                      Recent Games
-                    </h3>
-                    {playerHistory.recentGames &&
-                    playerHistory.recentGames.length > 0 ? (
-                      <div className="space-y-3 max-h-60 overflow-y-auto">
-                        {playerHistory.recentGames.map((game, index) => (
-                          <div
-                            key={index}
-                            className={`bg-white p-4 rounded-lg shadow-sm border-l-4 transition-all hover:shadow-md ${
-                              game.result === 'win'
-                                ? 'border-green-400 hover:bg-green-50'
-                                : 'border-red-400 hover:bg-red-50'
-                            }`}
-                          >
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center">
-                                <div className={`w-3 h-3 rounded-full mr-3 ${
-                                  game.result === 'win' ? 'bg-green-500' : 'bg-red-500'
-                                }`}></div>
-                                <div>
-                                  <span
-                                    className={`font-bold text-lg ${
-                                      game.result === 'win'
-                                        ? 'text-green-600'
-                                        : 'text-red-600'
-                                    }`}
-                                  >
-                                    {game.result === 'win' ? 'Victory' : 'Defeat'}
-                                  </span>
-                                  <div className="text-sm text-gray-500">
-                                    Game #{playerHistory.recentGames.length - index}
+                  <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                    <label className="font-semibold text-gray-700 text-lg">Rank:</label>
+                    <p className="text-gray-600 text-lg">{player?.rank || 0}</p>
+                  </div>
+
+                  {playerHistory && (
+                    <>
+                      <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                        <label className="font-semibold text-gray-700 text-lg">
+                          Total Games:
+                        </label>
+                        <p className="text-gray-600 text-lg">{playerHistory.totalGames || 0}</p>
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                        <label className="font-semibold text-gray-700 text-lg">
+                          Wins:
+                        </label>
+                        <p className="text-gray-600 text-lg">{playerHistory.wins || 0}</p>
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                        <label className="font-semibold text-gray-700 text-lg">
+                          Losses:
+                        </label>
+                        <p className="text-gray-600 text-lg">{playerHistory.losses || 0}</p>
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                        <label className="font-semibold text-gray-700 text-lg">
+                          Win Rate:
+                        </label>
+                        <p className="text-gray-600 text-lg">{playerHistory.winRate || '0%'}</p>
+                      </div>
+                    </>
+                  )}
+                  <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center">
+                    <label className="font-semibold text-gray-700 text-lg">
+                      Account Type:
+                    </label>
+                    <p className="text-gray-600 text-lg">
+                      {player?.isGuest ? 'Guest Account' : 'Registered Account'}
+                    </p>
+                  </div>
+                </div>
+
+                {player?.isGuest && (
+                  <button
+                    onClick={() => setShowConvertModal(true)}
+                    className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors font-medium text-lg"
+                  >
+                    Upgrade to Full Account
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {loadingHistory ? (
+                  <div className="text-center py-16">
+                    <div className="animate-spin w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-6"></div>
+                    <div className="text-xl text-gray-600">Loading history...</div>
+                  </div>
+                ) : playerHistory ? (
+                  <div className="space-y-6">
+                    {/* Recent Games Section */}
+                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                      <h3 className="font-bold text-xl mb-4 text-gray-800">
+                        Recent Games
+                      </h3>
+                      {playerHistory.recentGames &&
+                      playerHistory.recentGames.length > 0 ? (
+                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                          {playerHistory.recentGames.map((game, index) => (
+                            <div
+                              key={index}
+                              className={`bg-white p-4 rounded-lg shadow-sm border-l-4 transition-all hover:shadow-md ${
+                                game.result === 'win'
+                                  ? 'border-green-400 hover:bg-green-50'
+                                  : 'border-red-400 hover:bg-red-50'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center">
+                                  <div className={`w-3 h-3 rounded-full mr-3 ${
+                                    game.result === 'win' ? 'bg-green-500' : 'bg-red-500'
+                                  }`}></div>
+                                  <div>
+                                    <span
+                                      className={`font-bold text-lg ${
+                                        game.result === 'win'
+                                          ? 'text-green-600'
+                                          : 'text-red-600'
+                                      }`}
+                                    >
+                                      {game.result === 'win' ? 'Victory' : 'Defeat'}
+                                    </span>
+                                    <div className="text-sm text-gray-500">
+                                      Game #{playerHistory.recentGames.length - index}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm text-gray-600 font-medium">
+                                    {game.date}
+                                  </div>
+                                  <div className="text-xs text-gray-400">
+                                    {new Date(game.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-sm text-gray-600 font-medium">
-                                  {game.date}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  {new Date(game.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                </div>
-                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <span className="text-gray-400 text-2xl font-bold">?</span>
+                          ))}
                         </div>
-                        <p className="text-gray-500 text-lg font-medium">No games played yet</p>
-                        <p className="text-gray-400 text-sm mt-2">Start playing to see your game history!</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Performance Insights */}
-                  {playerHistory.totalGames > 0 && (
-                    <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl border border-yellow-200">
-                      <h3 className="font-bold text-xl mb-3 text-gray-800">
-                        Performance Insights
-                      </h3>
-                      <div className="space-y-2">
-                        {parseFloat(playerHistory.winRate) >= 70 && (
-                          <p className="text-green-700 font-medium">Excellent! You're on fire with a {playerHistory.winRate} win rate!</p>
-                        )}
-                        {parseFloat(playerHistory.winRate) >= 50 && parseFloat(playerHistory.winRate) < 70 && (
-                          <p className="text-blue-700 font-medium">Good job! You're maintaining a solid {playerHistory.winRate} win rate!</p>
-                        )}
-                        {parseFloat(playerHistory.winRate) < 50 && playerHistory.totalGames >= 3 && (
-                          <p className="text-orange-700 font-medium">Keep practicing! Every game makes you better!</p>
-                        )}
-                        <p className="text-gray-600 text-sm">
-                          You've played {playerHistory.totalGames} game{playerHistory.totalGames !== 1 ? 's' : ''} total.
-                        </p>
-                      </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-gray-400 text-2xl font-bold">?</span>
+                          </div>
+                          <p className="text-gray-500 text-lg font-medium">No games played yet</p>
+                          <p className="text-gray-400 text-sm mt-2">Start playing to see your game history!</p>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-gray-400 text-3xl font-bold">!</span>
                   </div>
-                  <p className="text-gray-500 text-xl font-medium">No history available</p>
-                  <p className="text-gray-400 text-sm mt-2">Start playing to build your game history!</p>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-gray-400 text-3xl font-bold">!</span>
+                    </div>
+                    <p className="text-gray-500 text-xl font-medium">No history available</p>
+                    <p className="text-gray-400 text-sm mt-2">Start playing to build your game history!</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
-      
+
       {/* Convert Modal */}
       {showConvertModal && (
         <div className="fixed inset-0 bg-black/50 z-50">
