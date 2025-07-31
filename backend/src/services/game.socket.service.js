@@ -134,11 +134,12 @@ export const handleCardHit = (socket, io, room, playerCard) => {
 
         if (hittingPlayer.hasHitCard) return socket.emit('not-your-turn', { message: 'You already hit your card'});
 
-        const isSuitSame = playerCard.suit === room.winningHitCard.suit;
-        if (isSuitSame) {
-            const isThrow = isCardHigher(playerCard, room.winningHitCard);
-            if (isThrow) return socket.emit('card-error', { message: 'Card is supposed to be Throw!'});
+        const isHigher = isCardHigher(playerCard, room.winningHitCard);
+        if (isHigher && playerCard.suit === room.winningHitCard.suit) {
+                room.winningHitCard = playerCard;
+                room.winningHitCardPlayer = hittingPlayer;
         }
+
         removeCardFromPlayer(socket, hittingPlayer, playerCard);
         hittingPlayer.hasHitCard = true;
         hittingPlayer.hitCard = playerCard;
@@ -151,32 +152,6 @@ export const handleCardHit = (socket, io, room, playerCard) => {
         } else {
             io.to(socket.data.roomId).emit('card-hit', { playerName: hittingPlayer.name, playerCard: { cardHit: playerCard, cardUnder: 'Unrevealed'}, remainingPlayers });
         }
-    }
-}
-
-export const handleCardThrow = (socket, io, room, playerCard) => {
-    const throwingPlayer = room.players.find(p => p.socketId === socket.id);
-    const remainingPlayers = room.players.filter(p => p.hasTong && !p.hasHitCard && p.socketId !== throwingPlayer.socketId).map(p => p.name);
-
-    if (throwingPlayer.hasHitCard) return socket.emit('not-your-turn', { message: 'You already hit your card'});
-    if (playerCard.suit !== room.winningHitCard.suit) return socket.emit('card-error', { message: 'Card need to be the same suit' });
-    const isWin = isCardHigher(playerCard, room.winningHitCard);
-    if (!isWin) return socket.emit('card-error', { message: 'Card is not higher' });
-
-    removeCardFromPlayer(socket, throwingPlayer, playerCard);
-
-    room.winningHitCard = playerCard;
-    room.winningHitCardPlayer = throwingPlayer;
-    throwingPlayer.hasHitCard = true;
-    throwingPlayer.hitCard = playerCard;
-    throwingPlayer.underCard = throwingPlayer.cards[0];
-
-    if (remainingPlayers.length === 0) {
-        io.to(socket.data.roomId).emit('card-throw', { playerName: throwingPlayer.name, playerCard: { cardHit: playerCard, cardUnder: 'Unrevealed'}});
-        io.to(socket.data.roomId).emit('all-hit', { message: 'Players have all hit their cards' });
-        room.hasFinishedHit = true;
-    } else {
-        io.to(socket.data.roomId).emit('card-throw', { playerName: throwingPlayer.name, playerCard: { cardHit: playerCard, cardUnder: 'Unrevealed'}, remainingPlayers });
     }
 }
 
@@ -195,7 +170,11 @@ export const handleShowResultNoRevealStage = (socket, io, room, gameWinner) => {
 
 export const handleShowResult = (socket, io, room) => {
     const resultRevealed = [];
-    for (const player of room.players) resultRevealed.push({ player, hitCard:player.hitCard, revealedCard: player.underCard });
+    for (const player of room.players) {
+        if (player.hasTong && player.hasHitCard && player.underCard) {
+            resultRevealed.push({ player, hitCard: player.hitCard, revealedCard: player.underCard });
+        }
+    }
 
     const winningHitCardPlayer = room.winningHitCardPlayer;
     let gameWinner = winningHitCardPlayer;
@@ -216,6 +195,7 @@ export const handleShowResult = (socket, io, room) => {
     });
 
     for (const result of resultRevealed) {
+        if (!result.revealedCard || !highestCard) continue;
         if (result.revealedCard.suit !== highestCard.suit) continue;
         if (isCardHigher(result.revealedCard, highestCard)) {
             highestCard = result.revealedCard;
@@ -239,8 +219,8 @@ export const handleShowResult = (socket, io, room) => {
 
 export const setDefaultRoom = (room) => {
     room.roundNumber = 1;
-    room.firstPlayerIndex = room.lastWinnerIndex ? room.lastWinnerIndex : 0;
-    room.currentTurnIndex = room.lastWinnerIndex ? room.lastWinnerIndex : 0;
+    room.firstPlayerIndex = room.lastWinnerIndex !== undefined ? room.lastWinnerIndex : 0;
+    room.currentTurnIndex = room.lastWinnerIndex !== undefined ? room.lastWinnerIndex : 0;
     room.cardWinner = undefined;
     room.firstPlayerToHitIndex = undefined;
     room.winningHitCard = undefined;

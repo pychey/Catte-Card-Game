@@ -65,14 +65,6 @@ export const hitCard = (socket, io, rooms, playerCard) => {
     gameServices.handleCardHit(socket, io, room, playerCard);
 }
 
-export const throwCard = (socket, io, rooms, playerCard) => {
-    const room = rooms.get(socket.data.roomId);
-    if(!room.players.find(p => p.socketId === socket.id)?.hasTong) return socket.emit('not-your-turn', { message: 'You have lost by not having Tong' });
-    if (!room.hasHitCard) return socket.emit('card-error', { message: 'Cannot throw without having any card hit'});
-
-    gameServices.handleCardThrow(socket, io, room, playerCard);
-}
-
 export const showResult = (socket, io, rooms) => {
     const room = rooms.get(socket.data.roomId);
     if(!room.hasFinishedHit) return socket.emit('game-error', { message: `Game hasn't finsihed hit card yet`});

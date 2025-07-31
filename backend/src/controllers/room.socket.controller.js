@@ -63,7 +63,7 @@ export const getRoomInfo = (socket, rooms) => {
     socket.emit('room-players', { players: room.players });
 }
 
-export const getActiveRooms = (socket, rooms) => {
+export const getActiveRooms = (io, rooms) => {
     const roomsList = Array.from(rooms.entries()).map(([roomId, room]) => ({
         roomId,
         roomName: room.name,
@@ -71,5 +71,5 @@ export const getActiveRooms = (socket, rooms) => {
         isGamePlaying: room.gameStarted || false
     }));
     
-    socket.emit('active-rooms', { rooms: roomsList });
+    io.emit('active-rooms', { rooms: roomsList });
 }

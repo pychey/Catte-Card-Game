@@ -5,7 +5,7 @@ const handleRoomEvents = (socket, io, rooms) => {
     socket.on('join-room', (roomId) => joinRoom(socket, io, rooms, roomId));
     socket.on('leave-room', () => leaveRoom(socket, io, rooms));
     socket.on('get-room-info', () => getRoomInfo(socket, rooms));
-    socket.on('get-active-rooms', () => getActiveRooms(socket, rooms));
+    socket.on('get-active-rooms', () => getActiveRooms(io, rooms));
 }
 
 export default handleRoomEvents;

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 
+const LAN_HOST = 'http://localhost:5001';
+
 const App = () => {
   const [currentRoute, setCurrentRoute] = useState('/auth');
   const [socket, setSocket] = useState(null);
@@ -19,6 +21,7 @@ const App = () => {
   const [roomName, setRoomName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [rooms, setRooms] = useState([]);
+  const [onlinePlayers, setOnlinePlayers] = useState(undefined);
 
   // Game state
   const [room, setRoom] = useState(null);
@@ -49,7 +52,7 @@ const App = () => {
 
   useEffect(() => {
     if (token && !socket) {
-      const newSocket = io('http://localhost:5001', {
+      const newSocket = io(LAN_HOST, {
         auth: { token },
       });
 
@@ -59,6 +62,7 @@ const App = () => {
         setCurrentRoute('/lobby');
         setTimeout(() => {
           newSocket.emit('get-active-rooms');
+          newSocket.emit('get-online-players');
         }, 100);
       });
 
@@ -81,6 +85,7 @@ const App = () => {
           setRoomId(null);
           setTimeout(() => {
             newSocket.emit('get-active-rooms');
+            newSocket.emit('get-online-players');
           }, 100);
         } else {
           setCurrentRoute('/room');
@@ -99,6 +104,10 @@ const App = () => {
       newSocket.on('room-players', (data) => {
         setPlayers(data.players);
       });
+
+      newSocket.on('online-players', (data) => {
+        setOnlinePlayers(data.onlinePlayersSize);
+      })
 
       newSocket.on('player-joined', (data) => {
         setPlayers((prev) => [...prev, data.player]);
@@ -120,6 +129,7 @@ const App = () => {
         setMyCards(data.yourCard);
         setGamePhase('Playing');
         setRoundNumber(1);
+        newSocket.emit('get-active-rooms');
       });
 
       newSocket.on('game-restarted', () => {
@@ -165,16 +175,6 @@ const App = () => {
       });
 
       newSocket.on('card-hit', (data) => {
-        setHitCards((prev) => [
-          ...prev,
-          { player: data.playerName, ...data.playerCard },
-        ]);
-        if (data.remainingPlayers) {
-          setMessage(`Waiting for: ${data.remainingPlayers.join(', ')}`);
-        }
-      });
-
-      newSocket.on('card-throw', (data) => {
         setHitCards((prev) => [
           ...prev,
           { player: data.playerName, ...data.playerCard },
@@ -256,9 +256,12 @@ const App = () => {
       });
 
       setSocket(newSocket);
-
+      
       return () => {
-        newSocket.close();
+        if (newSocket) {
+          newSocket.removeAllListeners();
+          newSocket.close();
+        }
       };
     }
   }, [token]);
@@ -299,7 +302,7 @@ const App = () => {
         body = { username, password };
       }
 
-      const response = await fetch(`http://localhost:5001${endpoint}`, {
+      const response = await fetch(`${LAN_HOST}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: mode === 'guest' ? undefined : JSON.stringify(body),
@@ -391,17 +394,6 @@ const App = () => {
     }
   };
 
-  const throwCard = () => {
-    setMessage('');
-    setMessage('')
-    setTurnMessage('')
-    if (socket && selectedCard) {
-      socket.emit('throw-card', selectedCard);
-      setSelectedCard(null);
-      setSelectedCardIndex(null);
-    }
-  };
-
   const showResult = () => {
     if (socket) {
       socket.emit('show-result');
@@ -417,7 +409,7 @@ const App = () => {
 
     setConvertLoading(true);
     try {
-      const response = await fetch('http://localhost:5001/auth/convert', {
+      const response = await fetch(`${LAN_HOST}/auth/convert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -454,7 +446,7 @@ const App = () => {
   const fetchPlayerHistory = async () => {
     setLoadingHistory(true);
     try {
-      const response = await fetch('http://localhost:5001/auth/history', {
+      const response = await fetch(`${LAN_HOST}/auth/history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -698,11 +690,12 @@ const App = () => {
         {rooms.length >= 0 && (
           <div className="mt-6 bg-white rounded-lg p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Available Rooms</h2>
+              <h2 className="text-xl font-bold">Available Rooms - Online : {onlinePlayers}</h2>
               <button
                 onClick={() => {
                   if (socket) {
                     socket.emit('get-active-rooms');
+                    socket.emit('get-online-players');
                   }
                 }}
                 className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -1253,12 +1246,6 @@ const App = () => {
                       >
                         Hit Card
                       </button>
-                      <button
-                        onClick={throwCard}
-                        className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 shadow-lg"
-                      >
-                        Throw Card
-                      </button>
                     </>
                   )}
                 </div>
@@ -1343,7 +1330,7 @@ const App = () => {
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
             <div className="bg-white rounded-lg p-8 text-center max-w-md w-full mx-4 shadow-2xl">
               <h2 className="text-3xl font-bold text-green-800 mb-4">
-                Game Over!
+                Game Finished!
               </h2>
               <p className="text-2xl font-semibold mb-2">
                 {gameResult.name === player?.username ? (

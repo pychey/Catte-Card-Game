@@ -23,6 +23,10 @@ io.on('connection', (socket) => {
         } 
     });
 
+    socket.on('get-online-players', () => {
+        io.emit('online-players', { onlinePlayersSize: connectedUsers.size });
+    })
+
     handleRoomEvents(socket, io, rooms);
     handleGameEvents(socket, io, rooms);
 
@@ -32,7 +36,7 @@ io.on('connection', (socket) => {
 
         const disconnectedRoomId = socket.data.roomId;
 
-        if (disconnectedRoomId) {
+        if (disconnectedRoomId && rooms.has(disconnectedRoomId)) {
             const room = rooms.get(disconnectedRoomId);
             socket.to(disconnectedRoomId).emit('player-left', { playerId: socket.data.player.id });
             room.players = room.players.filter( p => p.socketId !== socket.id);
@@ -50,5 +54,6 @@ io.on('connection', (socket) => {
         } 
         
         console.log("Online", connectedUsers.size);
+        io.emit('online-players', { onlinePlayersSize: connectedUsers.size} );
     });
 });
