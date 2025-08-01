@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const Auth = ({ setToken, setPlayer, message, setMessage, LAN_HOST }) => {
+const Auth = ({ setToken, setPlayer, message, setMessage, SERVER_URL }) => {
   const [authMode, setAuthMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -24,7 +24,7 @@ const Auth = ({ setToken, setPlayer, message, setMessage, LAN_HOST }) => {
         body = { username, password };
       }
 
-      const response = await fetch(`${LAN_HOST}${endpoint}`, {
+      const response = await fetch(`${SERVER_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: mode === 'guest' ? undefined : JSON.stringify(body),

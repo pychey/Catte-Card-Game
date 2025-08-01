@@ -1,6 +1,6 @@
 const Game = ({ 
-    player, socket, roomId, players, myCards, gameStarted, gamePhase, playedCards, hitCards, isMyTurn, turnMessage, roundNumber,       
-    selectedCard, selectedCardIndex, setSelectedCard, setSelectedCardIndex, gameResult, setGameResult, message, setMessage, restartGame
+    player, socket, roomId, players, myCards, gameStarted, gamePhase, playedCards, hitCards, isMyTurn, turnMessage, roundNumber, selectedCard,
+    selectedCardIndex, setSelectedCard, setSelectedCardIndex, gameResult, setGameResult, message, setMessage, restartGame, setTurnMessage
 }) => {
 
   const startGame = () => {

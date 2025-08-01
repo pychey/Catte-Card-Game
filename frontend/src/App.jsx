@@ -4,7 +4,7 @@ import Auth from './pages/Auth';
 import Lobby from './pages/Lobby';
 import Game from './pages/Game';
 
-const LAN_HOST = 'http://localhost:5001';
+const SERVER_URL = 'https://catte-card-game.onrender.com';
 
 const App = () => {
   const [currentRoute, setCurrentRoute] = useState('/auth');
@@ -33,7 +33,7 @@ const App = () => {
 
   useEffect(() => {
     if (token && !socket) {
-      const newSocket = io(LAN_HOST, {
+      const newSocket = io(SERVER_URL, {
         auth: { token },
       });
 
@@ -294,7 +294,7 @@ const App = () => {
         setPlayer={setPlayer}
         message={message}
         setMessage={setMessage}
-        LAN_HOST={LAN_HOST}
+        SERVER_URL={SERVER_URL}
       />
     );
   } else if (currentRoute === '/lobby') {
@@ -310,7 +310,7 @@ const App = () => {
         token={token}
         setToken={setToken}
         setPlayer={setPlayer}
-        LAN_HOST={LAN_HOST}
+        SERVER_URL={SERVER_URL}
       />
     );
   } else if (currentRoute === '/room') {
@@ -337,6 +337,7 @@ const App = () => {
         message={message}
         setMessage={setMessage}
         restartGame={restartGame}
+        setTurnMessage={setTurnMessage}
       />
     );
   }

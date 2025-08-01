@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const Lobby = ({ player, socket, rooms, onlinePlayers, message, setMessage, handleLogout, token, setToken, setPlayer, LAN_HOST }) => {
+const Lobby = ({ player, socket, rooms, onlinePlayers, message, setMessage, handleLogout, token, setToken, setPlayer, SERVER_URL }) => {
   const [roomName, setRoomName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -28,7 +28,7 @@ const Lobby = ({ player, socket, rooms, onlinePlayers, message, setMessage, hand
   const fetchPlayerHistory = async () => {
     setLoadingHistory(true);
     try {
-      const response = await fetch(`${LAN_HOST}/auth/history`, {
+      const response = await fetch(`${SERVER_URL}/auth/history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -55,7 +55,7 @@ const Lobby = ({ player, socket, rooms, onlinePlayers, message, setMessage, hand
 
     setConvertLoading(true);
     try {
-      const response = await fetch(`${LAN_HOST}/auth/convert`, {
+      const response = await fetch(`${SERVER_URL}/auth/convert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
