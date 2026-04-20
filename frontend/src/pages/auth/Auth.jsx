@@ -1,51 +1,16 @@
-import { useState } from 'react';
+import useAuthViewModel from './viewmodel/useAuthViewModel';
 
-const Auth = ({ setToken, setPlayer, message, setMessage, SERVER_URL }) => {
-  const [authMode, setAuthMode] = useState('login');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleAuth = async (mode) => {
-    setLoading(true);
-    setMessage('');
-
-    try {
-      let endpoint = '';
-      let body = {};
-
-      if (mode === 'guest') {
-        endpoint = '/auth/guest';
-      } else if (mode === 'register') {
-        endpoint = '/auth/register';
-        body = { username, password };
-      } else {
-        endpoint = '/auth/login';
-        body = { username, password };
-      }
-
-      const response = await fetch(`${SERVER_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: mode === 'guest' ? undefined : JSON.stringify(body),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setToken(data.data.token);
-        localStorage.setItem('token', data.data.token);
-        setPlayer(data.data.player);
-        setMessage('Authentication successful!');
-      } else {
-        setMessage(data.message);
-      }
-    } catch (error) {
-      setMessage('Connection error');
-    } finally {
-      setLoading(false);
-    }
-  };
+const Auth = ({ setToken, setPlayer, message, setMessage }) => {
+  const {
+    authMode,
+    setAuthMode,
+    username,
+    setUsername,
+    password,
+    setPassword,
+    loading,
+    handleAuth,
+  } = useAuthViewModel({ setToken, setPlayer, setMessage });
 
   return (
     <div className="min-h-screen bg-green-800 flex items-center justify-center">
@@ -66,9 +31,7 @@ const Auth = ({ setToken, setPlayer, message, setMessage, SERVER_URL }) => {
           <button
             onClick={() => setAuthMode('register')}
             className={`flex-1 py-2 px-4 rounded-r ${
-              authMode === 'register'
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-200'
+              authMode === 'register' ? 'bg-green-600 text-white' : 'bg-gray-200'
             }`}
           >
             Register
@@ -96,11 +59,7 @@ const Auth = ({ setToken, setPlayer, message, setMessage, SERVER_URL }) => {
               disabled={loading}
               className="w-full bg-green-600 text-white py-3 rounded hover:bg-green-700 disabled:opacity-50 mb-3"
             >
-              {loading
-                ? 'Loading...'
-                : authMode === 'login'
-                ? 'Login'
-                : 'Register'}
+              {loading ? 'Loading...' : authMode === 'login' ? 'Login' : 'Register'}
             </button>
           </>
         )}
