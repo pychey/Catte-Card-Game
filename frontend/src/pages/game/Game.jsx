@@ -28,12 +28,12 @@ const Game = ({
 
         {/* Header */}
         <div className="bg-white rounded-lg p-4 mb-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
             <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold">Catte Card Game - {roomId}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold">Catte <span className='inline sm:hidden md:inline'>Card Game</span> - {roomId}</h1>
               <button
                 onClick={leaveRoom}
-                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
+                className="hidden md:block bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
               >
                 Leave Room
               </button>
@@ -46,7 +46,23 @@ const Game = ({
               {!gameStarted && (
                 <button
                   onClick={startGame}
-                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                  className="hidden md:block bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
+                >
+                  Start Game
+                </button>
+              )}
+            </div>
+            <div className="flex md:hidden items-center gap-4">
+              <button
+                onClick={leaveRoom}
+                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
+              >
+                Leave Room
+              </button>
+              {!gameStarted && (
+                <button
+                  onClick={startGame}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
                 >
                   Start Game
                 </button>

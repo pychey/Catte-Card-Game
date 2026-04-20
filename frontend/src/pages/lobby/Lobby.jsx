@@ -3,6 +3,7 @@ import HelpModal from './components/HelpModal';
 import ConvertModal from './components/ConvertModal';
 import RoomList from './components/RoomList';
 import ProfileModal from './components/ProfileModal';
+import RoomActionCard from './components/RoomActionCard';
 
 const Lobby = ({ player, socket, rooms, onlinePlayers, message, setMessage, handleLogout, token, setToken, setPlayer }) => {
   const {
@@ -57,9 +58,9 @@ const Lobby = ({ player, socket, rooms, onlinePlayers, message, setMessage, hand
         </div>
 
         {/* Welcome */}
-        <div className="bg-white rounded-lg p-6 mb-6 flex justify-between items-center">
+        <div className="bg-white rounded-lg py-4 px-6 mb-6 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-green-800 mb-2">Game Lobby</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-green-800 mb-2">Game Lobby</h1>
             <p className="text-gray-600">Welcome, {player?.username}!</p>
           </div>
           <div
@@ -71,40 +72,27 @@ const Lobby = ({ player, socket, rooms, onlinePlayers, message, setMessage, hand
         </div>
 
         {/* Create & Join */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4">Create Room</h2>
-            <input
-              type="text"
-              placeholder="Room Name"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              className="w-full p-3 border rounded mb-4"
-            />
-            <button
-              onClick={createRoom}
-              className="w-full bg-green-600 text-white py-3 rounded hover:bg-green-700"
-            >
-              Create Room
-            </button>
-          </div>
-
-          <div className="bg-white rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4">Join Room</h2>
-            <input
-              type="text"
-              placeholder="Room ID"
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-              className="w-full p-3 border rounded mb-4"
-            />
-            <button
-              onClick={() => joinRoom()}
-              className="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700"
-            >
-              Join Room
-            </button>
-          </div>
+        <div className="grid sm:grid-cols-2 gap-6">
+          <RoomActionCard 
+            title={'Create Room'}
+            placeholder={'Room Name'}
+            value={roomName}
+            onChange={setRoomName}
+            onClick={createRoom}
+            buttonMessage={'Create Room'}
+            buttonColor='green'
+          />
+          
+          <RoomActionCard 
+            title="Join Room"
+            placeholder="Room ID"
+            value={roomId}
+            onChange={setRoomId}
+            transform={(val) => val.toUpperCase()}
+            onClick={() => joinRoom(roomId)}
+            buttonMessage="Join Room"
+            buttonColor='blue'
+          />
         </div>
 
         {/* Message */}

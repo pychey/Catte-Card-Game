@@ -3,6 +3,7 @@ import { faker } from "@faker-js/faker";
 
 export const createRoom = (socket, io, rooms, roomName) => {
     if (socket.data.roomId) return socket.emit('room-error','You are already in a room');
+    if (roomName.length > 20) return socket.emit('room-error','Room name must be 20 characters or fewer');
 
     const roomId = faker.string.alphanumeric(6).toUpperCase();
     roomServices.handleRoomCreation(socket, rooms, roomId, roomName);

@@ -15,11 +15,11 @@ const RoomCard = ({ room, onJoin }) => {
   }
 
   return (
-    <div className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
+    <div className="flex justify-between items-start sm:items-center p-3 border rounded hover:bg-gray-50">
       <div>
         <span className="font-medium">{room.roomName}</span>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
         <span className="text-sm text-gray-600">{room.playerCount}/4 Players</span>
         {isPlaying && (
           <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">

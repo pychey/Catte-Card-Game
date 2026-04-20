@@ -5,6 +5,7 @@ import { faker } from '@faker-js/faker';
 export const createPlayer = async (req,res) => {
     const { username, password } = req.body;
     if ( !username || !password ) return res.status(400).json({ message: 'Username and password are required' });
+    if ( username.length > 15 ) return res.status(400).json({ message: 'Username must be 15 characters or fewer' });
 
     try {
         const playerCreated = await authService.createPlayer(username, password);
@@ -57,7 +58,7 @@ export const deletePlayer = async (req, res) => {
 };
 
 export const createGuest = async (req, res) => {
-    const guestName = `Guest_${faker.internet.username()}${faker.string.alphanumeric({ length: 8 })}`;
+    const guestName = `Guest_${faker.string.alphanumeric({ length: 6 })}`;
 
     try {
         const guest = await authService.createGuest(guestName);
