@@ -95,7 +95,7 @@ const Game = ({
 
         {/* Turn Message */}
         {turnMessage && (
-          <div className="mt-2 text-center text-white text-lg">{turnMessage}</div>
+          <div className="mt-2 text-center text-white text-md md:text-lg">{turnMessage}</div>
         )}
 
         {/* Show Result Button */}
@@ -103,7 +103,7 @@ const Game = ({
           <div className="mt-4 flex justify-center">
             <button
               onClick={showResult}
-              className="bg-yellow-600 text-white px-6 py-3 rounded-lg hover:bg-yellow-700"
+              className="bg-yellow-600 text-white text-sm md:text-md px-3 md:px-6 py-2 md:py-3 rounded hover:bg-yellow-700"
             >
               Show Result
             </button>
